@@ -1,0 +1,1593 @@
+"""
+This script reads a Custom Script XML or JSON file and then creates/updates it on a specified Ingenium Server.
+
+Each input file is expected to contain the definition of a single custom script.
+
+The script supports two input formats:
+1. XML files following the custom_script_schema.rnc format (single custom_script element)
+2. JSON files following the v4 OpenAPI CustomScript schema format (single script object)
+
+File type is automatically detected based on file extension (.xml or .json) or content analysis.
+
+Base Path Support:
+The script requires a base path for constructing server script paths. This must be specified via:
+1. Command line argument --base_path
+2. Environment variable ING_CS_BASE_PATH
+The command line argument takes precedence over the environment variable.
+
+Script Path Resolution:
+The script treats script_path values in XML/JSON files as filenames located in the same directory 
+as the input file. The script will:
+1. Look for script files in the same directory as the XML/JSON input file
+2. Generate a server script path relative to the base_path for posting to the server
+3. Always generate hash (from actual script file) and script_id (from server path)
+4. Compare generated values with any provided values and log differences
+5. Use generated values regardless of what was provided in the input file
+6. Fail if the script file cannot be found
+
+Usage Examples:
+    # XML file processing with explicit base path
+    # XML file contains one custom_script element, script file must be in same directory
+    python CreateUpdateCustomScript.py https://ingenium.project.jpl.nasa.gov /path/to/my_script.xml --base_path /opt/scripts
+    
+    # JSON file processing with environment variable
+    # JSON file contains one script object, script file must be in same directory
+    export ING_CS_BASE_PATH=/opt/scripts
+    python CreateUpdateCustomScript.py https://ingenium.project.jpl.nasa.gov /path/to/my_script.json
+    
+    # With debug logging - shows hash/ID generation and comparison details
+    python CreateUpdateCustomScript.py https://ingenium.project.jpl.nasa.gov /path/to/my_script.xml --base_path /opt/scripts --debug
+
+Authors:
+    * Chris Swan (christopher.a.swan@jpl.nasa.gov)
+"""
+
+##################################################### Imports ######################################################
+import logging
+from logs import init_console_logger
+init_console_logger(logging.INFO)
+
+import common
+from project_config import get_custom_scripts, create_custom_script, update_custom_script
+import argparse
+import getpass
+import urllib3
+import json
+import xml.etree.ElementTree as ET
+import hashlib
+import base64
+import os
+import re
+from deepdiff import DeepDiff
+
+##################################################### Functions ######################################################
+
+logger = logging.getLogger(__name__)
+
+def get_input(args=[]):
+    """
+    This function gathers inputs for the Custom Script Create/Update script
+
+    Parameters
+    --------
+    args
+        list of input arguments. Used when this is called from another Python module.
+
+    Returns
+    -------
+        inputs: object
+            Argparse input object
+    """
+
+    parser = argparse.ArgumentParser(
+        description='This script reads a single Ingenium Custom Script XML or JSON definition and publishes it to an Ingenium Server.',
+        prog='Ingenium Create/Update Custom Script',
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    
+    parser.add_argument('server', type=str,
+                        help='Full Path to Ingenium Server (e.g. https://ingenium-sample_project.jpl.nasa.gov)')
+    
+    parser.add_argument('input_file', type=str,
+                        help='Path to the Custom Script XML or JSON file to process. File must contain exactly one script definition. File type is auto-detected based on extension.')
+
+    parser.add_argument('--debug', action='store_true', help='Enables debug logging.')
+    parser.add_argument('--username', type=str,
+                        help='Optional input to use a different username to login to Ingenium server.')
+    parser.add_argument('--ignore_ssl_error', action='store_true', help='Ignore SSL verification error')
+    parser.add_argument('--ssl_ca_bundle', type=str,
+                        help='Path to the SSL CA bundle. If provided, this will override ignore_ssl_error.')
+    parser.add_argument('--rsa', action='store_true',
+                        help='Uses RSA Two Factor Authentication (username/passcode) to authenticate.')
+    parser.add_argument('--base_path', type=str,
+                        help='Base path for script files. Script paths in input files are treated as relative to this path. Overrides ING_CS_BASE_PATH environment variable if provided. Required unless ING_CS_BASE_PATH is set.')
+    parser.add_argument('--output_json_file', type=str,
+                        help='Optional path to save the generated custom script JSON object to a file for debugging.')
+    parser.add_argument('--verify_update', action='store_true',
+                        help='After a create/update, verifies that the server custom script matches the generated object.')
+    parser.add_argument('--validate_layout', action='store_true',
+                        help='Validates the layout of the custom script definition without uploading to the server.')
+
+    if len(args) > 0:
+        inputs = parser.parse_args(args)
+    else:
+        inputs = parser.parse_args()
+
+    # Setup debug logging (if desired)
+    if inputs.debug:
+        for handler in logger.root.handlers:
+            handler.setLevel(logging.DEBUG)
+            logger.debug("Logging set to Debug.")
+    
+    return inputs
+
+
+def detect_file_type(file_path):
+    """
+    Detect file type based on extension
+    
+    Parameters
+    ----------
+    file_path : str
+        Path to the file
+        
+    Returns
+    -------
+    str
+        'xml' or 'json' based on file extension
+    """
+    extension = os.path.splitext(file_path)[1].lower()
+    if extension in ['.xml']:
+        return 'xml'
+    elif extension in ['.json']:
+        return 'json'
+    else:
+        # Try to detect based on content
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read().strip()
+                if content.startswith('<'):
+                    return 'xml'
+                elif content.startswith('{') or content.startswith('['):
+                    return 'json'
+        except Exception:
+            pass
+    
+    raise ValueError(f"Unable to determine file type for: {file_path}. Supported extensions: .xml, .json")
+
+
+def generate_script_id(script_path):
+    """
+    Generate a script ID by base64 encoding the script path
+    
+    Parameters
+    ----------
+    script_path : str
+        The script path
+        
+    Returns
+    -------
+    str
+        Base64 encoded script path
+    """
+    return base64.b64encode(script_path.encode('utf-8')).decode('utf-8')
+
+
+def generate_hash(script_file_path):
+    """
+    Generate SHA256 hash of the script file.
+    Always called to generate hash from the actual script file.
+    
+    Parameters
+    ----------
+    script_file_path : str
+        Full path to the script file
+        
+    Returns
+    -------
+    str
+        SHA256 hash of the file, or empty string if file doesn't exist
+    """
+    try:
+        if os.path.exists(script_file_path):
+            with open(script_file_path, 'rb') as f:
+                return hashlib.sha256(f.read()).hexdigest()
+        else:
+            logger.warning(f"Script file not found: {script_file_path}")
+            return ""
+    except Exception as e:
+        logger.warning(f"Could not generate hash for {script_file_path}: {e}")
+        return ""
+
+
+def generate_server_script_path(script_file_path, input_file_dir, base_path):
+    """
+    Generate the server script path relative to base_path.
+    
+    Parameters
+    ----------
+    script_file_path : str
+        Full path to the script file
+    input_file_dir : str
+        Directory containing the XML/JSON input file
+    base_path : str
+        Base path for server scripts
+        
+    Returns
+    -------
+    str
+        Script path relative to base_path for server use
+    """
+    try:
+        # Make paths absolute for comparison
+        abs_script_path = os.path.abspath(script_file_path)
+        abs_base_path = os.path.abspath(base_path)
+        abs_input_dir = os.path.abspath(input_file_dir)
+        
+        # Try to find relative path from base_path to script file
+        try:
+            server_path = os.path.relpath(abs_script_path, abs_base_path)
+            # Normalize path separators to forward slashes for server
+            server_path = server_path.replace('\\', '/')
+            return server_path
+        except ValueError:
+            # If we can't make it relative to base_path, use relative path from input dir
+            rel_to_input = os.path.relpath(abs_script_path, abs_input_dir)
+            logger.warning(f"Script file {abs_script_path} is not under base path {abs_base_path}, using relative path: {rel_to_input}")
+            return rel_to_input.replace('\\', '/')
+            
+    except Exception as e:
+        logger.warning(f"Could not generate server script path for {script_file_path}: {e}")
+        return os.path.basename(script_file_path)
+
+
+def resolve_script_file_path(script_path, input_file_dir, base_path):
+    """
+    Resolves the full path to the script file based on script_path attribute.
+
+    The resolution order is:
+    1. Check if script_path is an absolute path.
+    2. Check if script_path is relative to the base_path.
+    3. Check if script_path is relative to the input file's directory.
+
+    Parameters
+    ----------
+    script_path : str
+        The script_path value from the input file.
+    input_file_dir : str
+        The directory of the input XML/JSON file.
+    base_path : str
+        The base path for scripts.
+
+    Returns
+    -------
+    str or None
+        The resolved absolute path to the script file, or None if not found.
+    """
+    # 1. Check for absolute path
+    if os.path.isabs(script_path):
+        if os.path.exists(script_path):
+            logger.debug(f"Resolved script path as absolute path: {script_path}")
+            return os.path.abspath(script_path)
+        else:
+            logger.warning(f"Script path '{script_path}' is an absolute path but was not found.")
+            return None
+
+    # 2. Check for path relative to base_path
+    path_rel_to_base = os.path.join(base_path, script_path)
+    if os.path.exists(path_rel_to_base):
+        logger.debug(f"Resolved script path relative to base_path: {path_rel_to_base}")
+        return os.path.abspath(path_rel_to_base)
+
+    # 3. Check for path relative to input file directory (original behavior)
+    path_rel_to_input = os.path.join(input_file_dir, script_path)
+    if os.path.exists(path_rel_to_input):
+        logger.debug(f"Resolved script path relative to input file directory: {path_rel_to_input}")
+        return os.path.abspath(path_rel_to_input)
+    
+    logger.warning(f"Could not resolve script path '{script_path}'. Checked the following locations:")
+    logger.warning(f"  - As absolute path: '{os.path.abspath(script_path)}'")
+    logger.warning(f"  - Relative to base path: '{os.path.abspath(path_rel_to_base)}'")
+    logger.warning(f"  - Relative to input file: '{os.path.abspath(path_rel_to_input)}'")
+
+    return None
+
+
+def compare_and_log_differences(script_name, field_name, generated_value, provided_value):
+    """
+    Compare generated vs provided values and log differences.
+    
+    Parameters
+    ----------
+    script_name : str
+        Name of the script for logging
+    field_name : str
+        Name of the field being compared (e.g., 'hash', 'script_id')
+    generated_value : str
+        The generated value
+    provided_value : str
+        The provided value from input file
+        
+    Returns
+    -------
+    str
+        The generated value (always returned regardless of comparison)
+    """
+    if provided_value and provided_value != generated_value:
+        logger.warning(f"Script '{script_name}': Provided {field_name} '{provided_value}' differs from generated {field_name} '{generated_value}'. Using generated value.")
+    elif provided_value and provided_value == generated_value:
+        logger.debug(f"Script '{script_name}': Provided {field_name} matches generated value.")
+    else:
+        logger.debug(f"Script '{script_name}': No {field_name} provided, using generated value: {generated_value}")
+    
+    return generated_value
+
+
+def parse_input_field(input_elem):
+    """
+    Parse an input_field element from XML
+    
+    Parameters
+    ----------
+    input_elem : xml.etree.ElementTree.Element
+        The input_field XML element
+        
+    Returns
+    -------
+    dict
+        Parsed input field data
+    """
+    input_data = {
+        "name": input_elem.get("name"),
+        "description": input_elem.get("description"),
+        "phase": input_elem.get("phase"),
+        "input_required": input_elem.get("required"),
+        "type": input_elem.get("type")
+    }
+    
+    display_name = input_elem.get("display_name")
+    if display_name:
+        input_data["display_name"] = display_name
+
+    # Add default value if present
+    default_value = input_elem.get("default_value")
+    if default_value:
+        input_data["default_value"] = default_value
+        
+    # Parse enumerations if present
+    enum_elem = input_elem.find("enumeration")
+    if enum_elem is not None:
+        enumerations = []
+        for enum in enum_elem.findall("enum"):
+            enum_data = {"symbol": enum.get("symbolic")}
+            if enum.get("numeric") is not None:
+                enum_data["numeric"] = int(enum.get("numeric"))
+            enumerations.append(enum_data)
+        input_data["enumerations"] = enumerations
+    
+    return input_data
+
+
+def parse_output_field(output_elem):
+    """
+    Parse an output_field element from XML
+    
+    Parameters
+    ----------
+    output_elem : xml.etree.ElementTree.Element
+        The output_field XML element
+        
+    Returns
+    -------
+    dict
+        Parsed output field data
+    """
+    output_data = {
+        "name": output_elem.get("name"),
+        "description": output_elem.get("description"), 
+        "type": output_elem.get("type")
+    }
+
+    display_name = output_elem.get("display_name")
+    if display_name:
+        output_data["display_name"] = display_name
+    
+    return output_data
+
+
+def parse_output_array_field(output_array_field_elem):
+    """
+    Parse an output_array_field element from XML
+    
+    Parameters
+    ----------
+    output_array_field_elem : xml.etree.ElementTree.Element
+        The output_array_field XML element
+        
+    Returns
+    -------
+    dict
+        Parsed output array field data
+    """
+    output_array_field_data = {
+        "name": output_array_field_elem.get("name"),
+        "description": output_array_field_elem.get("description"),
+        "type": output_array_field_elem.get("type"),
+        "visible": output_array_field_elem.get("visible", "YES")
+    }
+
+    display_name = output_array_field_elem.get("display_name")
+    if display_name:
+        output_array_field_data["display_name"] = display_name
+
+    return output_array_field_data
+
+
+def parse_output_array(output_array_elem):
+    """
+    Parse an output_array element from XML
+    
+    Parameters
+    ----------
+    output_array_elem : xml.etree.ElementTree.Element
+        The output_array XML element
+        
+    Returns
+    -------
+    dict
+        Parsed output array data
+    """
+    output_array_data = {
+        "name": output_array_elem.get("name"),
+        "description": output_array_elem.get("description"),
+        "max_entries": int(output_array_elem.get("max_entries", 0)),
+        "outputs": []
+    }
+
+    display_name = output_array_elem.get("display_name")
+    if display_name:
+        output_array_data["display_name"] = display_name
+    
+    # Parse output array fields
+    for field_elem in output_array_elem.findall("output_array_field"):
+        output_array_data["outputs"].append(parse_output_array_field(field_elem))
+    
+    return output_array_data
+
+
+def parse_script_entry(entry_elem):
+    """
+    Parse a script_entry element from XML
+    
+    Parameters
+    ----------
+    entry_elem : xml.etree.ElementTree.Element
+        The script_entry XML element
+        
+    Returns
+    -------
+    dict
+        Parsed script entry data
+    """
+    entry_data = {
+        "entry_inputs": [],
+        "entry_outputs": []
+    }
+    
+    # Add display field if present
+    display_value = entry_elem.get("display_value")
+    if display_value:
+        entry_data["display_field"] = display_value
+    
+    # Parse input fields
+    for input_elem in entry_elem.findall("input_field"):
+        entry_data["entry_inputs"].append(parse_input_field(input_elem))
+    
+    # Parse output fields  
+    for output_elem in entry_elem.findall("output_field"):
+        entry_data["entry_outputs"].append(parse_output_field(output_elem))
+        
+    # Parse output array if present
+    output_array_elem = entry_elem.find("output_array")
+    if output_array_elem is not None:
+        entry_data["entry_output_array"] = parse_output_array(output_array_elem)
+    
+    return entry_data
+
+
+def parse_custom_script_xml(xml_file, base_path):
+    """
+    Parse a custom script XML file according to the schema.
+    Expects a single custom_script element in the file.
+    Respects hash attribute if provided in XML, otherwise generates one.
+    
+    Parameters
+    ----------
+    xml_file : str
+        Path to the XML file
+    base_path : str
+        Base path for script files. Script paths are treated as relative to this path.
+        
+    Returns
+    -------
+    dict
+        Custom script data dictionary
+    """
+    try:
+        tree = ET.parse(xml_file)
+        root = tree.getroot()
+        
+        # Validate root element
+        if root.tag != 'custom-scripts':
+            msg = f"Invalid XML root element. Expected 'custom-scripts', got '{root.tag}'"
+            logger.error(msg)
+            raise common.IngeniumLibError(msg)
+        
+        # Get directory of the XML file for relative script path resolution
+        xml_dir = os.path.dirname(os.path.abspath(xml_file))
+        
+        # Find the single custom_script element
+        script_elements = root.findall("custom_script")
+        if len(script_elements) == 0:
+            msg = f"No custom_script element found in XML file: {xml_file}"
+            logger.error(msg)
+            raise common.IngeniumLibError(msg)
+        elif len(script_elements) > 1:
+            msg = f"Multiple custom_script elements found in XML file: {xml_file}. Expected exactly one."
+            logger.error(msg)
+            raise common.IngeniumLibError(msg)
+        
+        script_elem = script_elements[0]
+        script_name = script_elem.get("script_name")
+        script_path = script_elem.get("script_path")
+        description = script_elem.get("description")
+        hash_value = script_elem.get("hash")  # Get hash from XML if provided
+        
+        # Validate required attributes
+        if not script_name:
+            msg = "Custom script element missing required script_name attribute"
+            logger.error(msg)
+            raise common.IngeniumLibError(msg)
+        if not description:
+            msg = f"Custom script '{script_name}' missing required description attribute"
+            logger.error(msg)
+            raise common.IngeniumLibError(msg)
+            
+            # Handle missing script_path by building it from script_name
+            if not script_path:
+                script_path = script_name
+                logger.info(f"Script path not provided for '{script_name}', using script name as filename: {script_path}")
+            
+        # Resolve full path to script file
+        script_file_path = resolve_script_file_path(script_path, xml_dir, base_path)
+        if not script_file_path:
+            msg = f"Script file '{script_path}' could not be found for custom script '{script_name}'"
+            logger.error(msg)
+            raise common.IngeniumLibError(msg)
+        logger.debug(f"Found script file: {script_file_path}")
+        
+        # Generate server script path (relative to base_path)
+        server_script_path = generate_server_script_path(script_file_path, xml_dir, base_path)
+        
+        # Always generate hash and script_id
+        generated_hash = generate_hash(script_file_path)
+        generated_script_id = generate_script_id(server_script_path)
+        
+        # Compare and use generated values
+        final_hash = compare_and_log_differences(script_name, "hash", generated_hash, hash_value)
+        final_script_id = compare_and_log_differences(script_name, "script_id", generated_script_id, None)  # XML doesn't provide script_id
+        
+        script_data = {
+            "script_name": script_name,
+            "script_path": server_script_path,  # Use server path for posting
+            "description": description,
+            "script_id": final_script_id,
+            "hash": final_hash,
+            "status": "ACTIVE",  # Default status
+            "inputs": [],
+            "outputs": [],
+            "entries": [],
+            "layout": []
+        }
+        
+        # Parse input fields
+        for input_elem in script_elem.findall("input_field"):
+            try:
+                input_data = parse_input_field(input_elem)
+                if input_data.get("name"):  # Only add if has required name
+                    script_data["inputs"].append(input_data)
+                else:
+                    logger.warning(f"Skipping input field without name in script '{script_name}'")
+            except Exception as e:
+                logger.warning(f"Error parsing input field in script '{script_name}': {e}")
+        
+        # Parse output fields
+        for output_elem in script_elem.findall("output_field"):
+            try:
+                output_data = parse_output_field(output_elem)
+                if output_data.get("name"):  # Only add if has required name
+                    script_data["outputs"].append(output_data)
+                else:
+                    logger.warning(f"Skipping output field without name in script '{script_name}'")
+            except Exception as e:
+                logger.warning(f"Error parsing output field in script '{script_name}': {e}")
+            
+        # Parse output array if present
+        output_array_elem = script_elem.find("output_array")
+        if output_array_elem is not None:
+            try:
+                script_data["output_array"] = parse_output_array(output_array_elem)
+            except Exception as e:
+                logger.warning(f"Error parsing output array in script '{script_name}': {e}")
+            
+        # Parse script entries if present
+        entry_elem = script_elem.find("script_entry")
+        if entry_elem is not None:
+            try:
+                script_data["entries"].append(parse_script_entry(entry_elem))
+            except Exception as e:
+                logger.warning(f"Error parsing script entry in script '{script_name}': {e}")
+        
+        # Collect input field names for layout validation
+        input_names = {inp['name'] for inp in script_data.get('inputs', []) if inp.get('name')}
+        for entry in script_data.get('entries', []):
+            for inp in entry.get('entry_inputs', []):
+                if inp.get('name'):
+                    input_names.add(inp['name'])
+
+        # Parse advanced layout if present
+        layout_elem = script_elem.find("advanced_layout")
+        if layout_elem is not None:
+            try:
+                script_data["layout"] = parse_advanced_layout(layout_elem, input_names)
+            except Exception as e:
+                logger.warning(f"Error parsing advanced layout in script '{script_name}': {e}")
+        
+        logger.debug(f"Successfully parsed custom script: {script_name}")
+        return script_data
+        
+    except ET.ParseError as e:
+        msg = f"Error parsing XML file {xml_file}: {e}"
+        logger.error(msg)
+        raise common.IngeniumLibError(msg)
+    except Exception as e:
+        msg = f"Error processing XML file {xml_file}: {e}"
+        logger.error(msg)
+        raise common.IngeniumLibError(msg)
+
+
+def parse_custom_script_json(json_file, base_path):
+    """
+    Parse a custom script JSON file formatted according to v4 OpenAPI CustomScript schema.
+    Expects a single script object in the file.
+    Assumes the provided JSON is valid. Respects hash field if provided, otherwise generates one.
+    
+    Parameters
+    ----------
+    json_file : str
+        Path to the JSON file
+    base_path : str
+        Base path for script files. Script paths are treated as relative to this path.
+        
+    Returns
+    -------
+    dict
+        Custom script data dictionary
+    """
+    try:
+        with open(json_file, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        
+        # Expect only a single script object
+        if not isinstance(data, dict):
+            msg = f"Invalid JSON format. Expected single script object, got {type(data)}"
+            logger.error(msg)
+            raise common.IngeniumLibError(msg)
+        
+        if isinstance(data, list):
+            msg = f"JSON file contains an array. Expected single script object, got array with {len(data)} items"
+            logger.error(msg)
+            raise common.IngeniumLibError(msg)
+        
+        # Get directory of the JSON file for relative script path resolution
+        json_dir = os.path.dirname(os.path.abspath(json_file))
+        
+        script_data = data
+        script_name = script_data.get('script_name', '')
+        script_path = script_data.get('script_path', '')
+            
+        # Handle missing script_path by building it from script_name
+        if not script_path and script_name:
+            script_path = script_name
+            logger.info(f"Script path not provided for '{script_name}', using script name as filename: {script_path}")
+        elif not script_path:
+            msg = f"JSON script missing both script_path and script_name"
+            logger.error(msg)
+            raise common.IngeniumLibError(msg)
+        
+        # Resolve full path to script file
+        script_file_path = resolve_script_file_path(script_path, json_dir, base_path)
+        if not script_file_path:
+            msg = f"Script file '{script_path}' could not be found for custom script '{script_name}'"
+            logger.error(msg)
+            raise common.IngeniumLibError(msg)
+        logger.debug(f"Found script file: {script_file_path}")
+        
+        # Generate server script path (relative to base_path)
+        server_script_path = generate_server_script_path(script_file_path, json_dir, base_path)
+        
+        # Always generate hash and script_id
+        generated_hash = generate_hash(script_file_path)
+        generated_script_id = generate_script_id(server_script_path)
+        
+        # Get provided values from JSON
+        provided_script_id = script_data.get('script_id')
+        provided_hash = script_data.get('hash')
+        
+        # Compare and use generated values
+        final_hash = compare_and_log_differences(script_name, "hash", generated_hash, provided_hash)
+        final_script_id = compare_and_log_differences(script_name, "script_id", generated_script_id, provided_script_id)
+        
+        # Update script data with generated values and server path
+        script_data['script_path'] = server_script_path  # Use server path for posting
+        script_data['script_id'] = final_script_id
+        script_data['hash'] = final_hash
+        
+        # Set default status if not provided
+        if 'status' not in script_data:
+            script_data['status'] = 'ACTIVE'
+        
+        # Ensure list fields exist
+        if 'inputs' not in script_data:
+            script_data['inputs'] = []
+        if 'outputs' not in script_data:
+            script_data['outputs'] = []
+        if 'entries' not in script_data:
+            script_data['entries'] = []
+        if 'layout' not in script_data:
+            script_data['layout'] = []
+        
+        logger.debug(f"Successfully processed JSON script: {script_data.get('script_name')}")
+        return script_data
+        
+    except json.JSONDecodeError as e:
+        msg = f"Error parsing JSON file {json_file}: {e}"
+        logger.error(msg)
+        raise common.IngeniumLibError(msg)
+    except Exception as e:
+        msg = f"Error processing JSON file {json_file}: {e}"
+        logger.error(msg)
+        raise common.IngeniumLibError(msg)
+
+
+def validate_script_data(script_data):
+    """
+    Validate that a script data dictionary has all required fields
+    
+    Parameters
+    ----------
+    script_data : dict
+        The script data dictionary to validate
+        
+    Returns
+    -------
+    bool
+        True if valid, False otherwise
+    """
+    required_fields = ['script_name', 'script_path', 'description', 'script_id']
+    
+    for field in required_fields:
+        if not script_data.get(field):
+            logger.error(f"Script data missing required field: {field}")
+            return False
+    
+    # Validate script name format (should match the regex pattern in schema)
+    script_name = script_data.get('script_name')
+    if not script_name.replace('_', '').replace('-', '').replace(' ', '').isalnum():
+        logger.error(f"Script name contains invalid characters: {script_name}")
+        return False
+    
+    return True
+
+
+def parse_layout_element(layout_elem):
+    """
+    Parse layout elements from XML advanced layout
+    
+    Parameters
+    ----------
+    layout_elem : xml.etree.ElementTree.Element
+        The layout XML element
+        
+    Returns
+    -------
+    dict
+        Parsed layout data
+    """
+    layout_data = {}
+    
+    # Parse row, column, width, height, align attributes
+    if layout_elem.get("row"):
+        layout_data["row"] = int(layout_elem.get("row"))
+    if layout_elem.get("column"):
+        layout_data["column"] = int(layout_elem.get("column"))
+    if layout_elem.get("width"):
+        layout_data["width"] = int(layout_elem.get("width"))
+    if layout_elem.get("height"):
+        layout_data["height"] = int(layout_elem.get("height"))
+    if layout_elem.get("align"):
+        layout_data["align"] = layout_elem.get("align")
+    
+    return layout_data
+
+
+def parse_label_element(label_elem):
+    """
+    Parse label elements from XML
+    
+    Parameters
+    ----------
+    label_elem : xml.etree.ElementTree.Element
+        The label XML element
+        
+    Returns
+    -------
+    dict
+        Parsed label data
+    """
+    if label_elem is None:
+        return None
+        
+    return {
+        "label_content": label_elem.get("label_content", ""),
+        "label_loc": label_elem.get("label_loc", "TOP"),
+        "label_align": label_elem.get("label_align", "LEFT")
+    }
+
+
+def parse_template_element(template_elem):
+    """
+    Parse template elements from XML
+    
+    Parameters
+    ----------
+    template_elem : xml.etree.ElementTree.Element
+        The template XML element
+        
+    Returns
+    -------
+    dict
+        Parsed template data
+    """
+    if template_elem is None:
+        return None
+        
+    return {
+        "template": template_elem.get("template", "")
+    }
+
+
+def parse_mouseover_display_element(mouseover_elem):
+    """
+    Parse mouseover_display elements from XML
+    
+    Parameters
+    ----------
+    mouseover_elem : xml.etree.ElementTree.Element
+        The mouseover_display XML element
+        
+    Returns
+    -------
+    dict
+        Parsed mouseover data in a dictionary with key 'mouseover_elements'
+    """
+    if mouseover_elem is None:
+        return None
+        
+    elements = []
+    for elem in mouseover_elem.findall("mouseover_element"):
+        element_data = {"field_name": elem.get("field_name")}
+        if elem.get("display_name"):
+            element_data["display_name"] = elem.get("display_name")
+        elements.append(element_data)
+        
+    return {"mouseover_elements": elements}
+
+
+def parse_layout_display_element(display_elem):
+    """
+    Parse layout_display elements from XML
+    
+    Parameters
+    ----------
+    display_elem : xml.etree.ElementTree.Element
+        The layout_display XML element
+        
+    Returns
+    -------
+    dict
+        Parsed layout display data
+    """
+    if display_elem is None:
+        return None
+        
+    display_data = {"layout_type": "DISPLAY"}
+    
+    template_elem = display_elem.find("template")
+    if template_elem is not None:
+        display_data["template"] = parse_template_element(template_elem)
+    
+    # Optional mouseover support for layout_display
+    mouseover_elem = display_elem.find("mouseover_display")
+    if mouseover_elem is not None:
+        display_data["mouseover"] = parse_mouseover_display_element(mouseover_elem)
+        
+    layout_elem = display_elem.find("layout")
+    if layout_elem is not None:
+        display_data["layout"] = parse_layout_element(layout_elem)
+        
+    return display_data
+
+
+def parse_layout_field_element(field_elem):
+    """
+    Parse layout_field elements from XML
+    
+    Parameters
+    ----------
+    field_elem : xml.etree.ElementTree.Element
+        The layout_field XML element
+        
+    Returns
+    -------
+    dict
+        Parsed layout field data
+    """
+    if field_elem is None:
+        return None
+        
+    field_data = {
+        "field_name": field_elem.get("field_name"),
+        "layout_type": "FIELD"
+    }
+    
+    if field_elem.get("tool_tip"):
+        field_data["tool_tip"] = field_elem.get("tool_tip")
+        
+    label_elem = field_elem.find("label")
+    if label_elem is not None:
+        field_data["label"] = parse_label_element(label_elem)
+        
+    layout_elem = field_elem.find("layout")
+    if layout_elem is not None:
+        field_data["layout"] = parse_layout_element(layout_elem)
+        
+    return field_data
+
+
+def parse_icon_element(icon_elem):
+    """
+    Parse icon elements from XML
+    
+    Parameters
+    ----------
+    icon_elem : xml.etree.ElementTree.Element
+        The icon XML element
+        
+    Returns
+    -------
+    dict
+        Parsed icon data
+    """
+    if icon_elem is None:
+        return None
+        
+    icon_data = {
+        "icon_type": icon_elem.get("icon_type"),
+        "layout_type": "ICON"
+    }
+    
+    mouseover_elem = icon_elem.find("mouseover_display")
+    if mouseover_elem is not None:
+        icon_data["mouseover"] = parse_mouseover_display_element(mouseover_elem)
+        
+    layout_elem = icon_elem.find("layout")
+    if layout_elem is not None:
+        icon_data["layout"] = parse_layout_element(layout_elem)
+        
+    return icon_data
+
+
+def parse_table_column_element(table_field_elem):
+    """
+    Parse table_field elements from XML
+    
+    Parameters
+    ----------
+    table_field_elem : xml.etree.ElementTree.Element
+        The table_field XML element
+        
+    Returns
+    -------
+    dict
+        Parsed table field data
+    """
+    if table_field_elem is None:
+        return None
+    
+    field_data = {}
+    if table_field_elem.get("width"):
+        field_data["width"] = int(table_field_elem.get("width"))
+    if table_field_elem.get("column_label"):
+        field_data["column_label"] = table_field_elem.get("column_label")
+        
+    template_elem = table_field_elem.find("template")
+    if template_elem is not None:
+        field_data["template"] = parse_template_element(template_elem)
+        
+    return field_data
+
+
+def parse_table_element(table_elem):
+    """
+    Parse table elements from XML
+    
+    Parameters
+    ----------
+    table_elem : xml.etree.ElementTree.Element
+        The table XML element
+        
+    Returns
+    -------
+    dict
+        Parsed table data
+    """
+    if table_elem is None:
+        return None
+        
+    table_data = {
+        "table_name": table_elem.get("table_name"),
+        "layout_type": "TABLE",
+        "table_column": []
+    }
+    
+    if table_elem.get("row_height"):
+        table_data["row_height"] = int(table_elem.get("row_height"))
+
+    label_elem = table_elem.find("label")
+    if label_elem is not None:
+        table_data["label"] = parse_label_element(label_elem)
+        
+    mouseover_elem = table_elem.find("mouseover_display")
+    if mouseover_elem is not None:
+        table_data["mouseover"] = parse_mouseover_display_element(mouseover_elem)
+        
+    for field_elem in table_elem.findall("table_field"):
+        table_data["table_column"].append(parse_table_column_element(field_elem))
+        
+    return table_data
+
+
+def parse_image_display_element(image_elem):
+    """
+    Parse image_display elements from XML
+    
+    Parameters
+    ----------
+    image_elem : xml.etree.ElementTree.Element
+        The image_display XML element
+        
+    Returns
+    -------
+    dict
+        Parsed image layout data
+    """
+    if image_elem is None:
+        return None
+    
+    image_data = {
+        "layout_type": "IMAGE",
+        "field_name": image_elem.get("field_name")
+    }
+    
+    label_elem = image_elem.find("label")
+    if label_elem is not None:
+        image_data["label"] = parse_label_element(label_elem)
+        
+    layout_elem = image_elem.find("layout")
+    if layout_elem is not None:
+        image_data["layout"] = parse_layout_element(layout_elem)
+        
+    return image_data
+
+
+def parse_series_element(series_elem):
+    """
+    Parse series elements from XML
+    
+    Parameters
+    ----------
+    series_elem : xml.etree.ElementTree.Element
+        The series XML element
+        
+    Returns
+    -------
+    dict
+        Parsed series layout data
+    """
+    if series_elem is None:
+        return None
+        
+    series_data = {
+        "layout_type": "SERIES",
+        "field_name": series_elem.get("field_name"),
+    }
+        
+    label_elem = series_elem.find("label")
+    if label_elem is not None:
+        series_data["label"] = parse_label_element(label_elem)
+        
+    layout_elem = series_elem.find("layout")
+    if layout_elem is not None:
+        series_data["layout"] = parse_layout_element(layout_elem)
+        
+    return series_data
+
+
+def parse_advanced_layout(layout_elem, input_names):
+    """
+    Parse advanced layout section from XML
+    
+    Parameters
+    ----------
+    layout_elem : xml.etree.ElementTree.Element
+        The advanced_layout XML element
+    input_names : set
+        A set of all input field names to validate layout content.
+        
+    Returns
+    -------
+    list
+        List of section layout data
+    """
+    layout_sections = []
+    
+    # Parser mapping for layout elements
+    element_parsers = {
+        "layout_display": parse_layout_display_element,
+        "layout_field": parse_layout_field_element,
+        "icon": parse_icon_element,
+        "table": parse_table_element,
+        "image_display": parse_image_display_element,
+        "series": parse_series_element
+    }
+
+    def _parse_header_content_part(part_elem, layout_key):
+        if part_elem is None:
+            return None
+        
+        layout_data = {layout_key: []}
+        for child in part_elem:
+            if child.tag in element_parsers:
+                parsed_child = element_parsers[child.tag](child)
+                if parsed_child:
+                    layout_data[layout_key].append(parsed_child)
+        return layout_data if layout_data[layout_key] else None
+
+    def _parse_results_part(part_elem, layout_key):
+        if part_elem is None:
+            return None
+        
+        layout_data = {layout_key: []}
+        for child in part_elem:
+            if child.tag in element_parsers:
+                # Results can only contain output fields
+                if child.tag == 'layout_field':
+                    field_name = child.get("field_name")
+                    if field_name in input_names:
+                        logger.warning(f"Input field '{field_name}' found in results section. Skipping.")
+                        continue
+                if child.tag == 'image_layout':
+                    child.tag = 'image_display'
+                if child.tag == 'series_layout':
+                    child.tag = 'series'
+                parsed_child = element_parsers[child.tag](child)
+                if parsed_child:
+                    layout_data[layout_key].append(parsed_child)
+        return layout_data if layout_data[layout_key] else None
+
+    # Process all sections in order to maintain order from input file
+    for section_elem in layout_elem:
+        section_tag = section_elem.tag
+        if section_tag not in ["section", "entry_section"]:
+            logger.warning(f"Unsupported layout section found: {section_tag}. Skipping.")
+            continue
+        
+        section_data = {"entry": "TRUE" if section_tag == "entry_section" else "FALSE"}
+        
+        header_data = _parse_header_content_part(section_elem.find("section_header"), "headerlayout")
+        if header_data:
+            section_data["header"] = header_data
+        
+        content_data = _parse_header_content_part(section_elem.find("section_content"), "contentlayout")
+        if content_data:
+            section_data["content"] = content_data
+
+        results_data = _parse_results_part(section_elem.find("section_results"), "resultslayout")
+        if results_data:
+            section_data["results"] = results_data
+        
+        layout_sections.append(section_data)
+            
+    return layout_sections
+
+
+def compare_configs(generated_config, server_config):
+    """
+    Compare the generated config with the server's config and log differences.
+    
+    Parameters
+    ----------
+    generated_config : dict
+        The configuration generated from the input file
+    server_config : dict
+        The configuration returned from the server
+        
+    Returns
+    -------
+    bool
+        True if configs match, False otherwise
+    """
+    # Exclude fields that are generated by the server and not present in the input
+    exclude_paths = [
+        "root['creation_date']", 
+        "root['last_modified_date']"
+    ]
+    
+    # Perform a deep comparison between the two dictionaries
+    diff = DeepDiff(generated_config, server_config, ignore_order=True, 
+                    exclude_paths=exclude_paths)
+    
+    if not diff:
+        logger.info("Server configuration matches generated configuration.")
+        return True
+    else:
+        logger.warning("Server configuration does not match generated configuration.")
+        
+        # Log the differences in a readable format
+        for change_type, changes in diff.items():
+            logger.warning(f"Found differences of type '{change_type}':")
+            if isinstance(changes, dict):
+                for path, change in changes.items():
+                    logger.warning(f"  - Path: {path}")
+                    if 'old_value' in change and 'new_value' in change:
+                        logger.warning(f"    - Generated: {change['old_value']}")
+                        logger.warning(f"    - Server:    {change['new_value']}")
+                    else:
+                        logger.warning(f"    - Change: {change}")
+            else:
+                 logger.warning(f"  - {changes}")
+
+        return False
+
+##################################################### Main ###########################################################
+
+
+def validate_advanced_layout(custom_script):
+    """
+    Validates the advanced layout of a custom script.
+
+    This function checks for several potential issues:
+    1.  Overlapping layout elements.
+    2.  References to undefined fields in layout items like FIELD, IMAGE, SERIES.
+    3.  Template variables in DISPLAY elements that do not map to defined fields.
+    4.  Template variables in TABLE columns that do not map to output array fields.
+    5.  Table column widths exceeding a total of 12.
+    It distinguishes between regular sections and entry sections (for array-like behavior).
+
+    Parameters
+    ----------
+    custom_script : dict
+        The custom script data dictionary.
+
+    Returns
+    -------
+    bool
+        True if the layout is valid, False otherwise.
+    """
+    if not custom_script.get('layout'):
+        logger.info("No advanced layout found, skipping validation.")
+        return True
+
+    logger.info("Validating advanced layout...")
+    is_valid = True
+
+    # Collect all defined field names from top-level
+    top_level_inputs = {f['name'] for f in custom_script.get('inputs', [])}
+    top_level_outputs = {f['name'] for f in custom_script.get('outputs', [])}
+    top_level_all_fields = top_level_inputs.union(top_level_outputs)
+    top_level_output_array_fields = set()
+    if custom_script.get('output_array'):
+        top_level_output_array_fields = {f['name'] for f in custom_script['output_array'].get('outputs', [])}
+    
+    # Collect all defined field names from script entries
+    entry_all_fields = set()
+    entry_output_array_fields = set()
+    if custom_script.get('entries'):
+        entry = custom_script['entries'][0]  # Assuming one entry
+        entry_inputs = {f['name'] for f in entry.get('entry_inputs', [])}
+        entry_outputs = {f['name'] for f in entry.get('entry_outputs', [])}
+        entry_all_fields = entry_inputs.union(entry_outputs)
+        if entry.get('entry_output_array'):
+            entry_output_array_fields = {f['name'] for f in entry['entry_output_array'].get('outputs', [])}
+
+    def check_field_name(field_name, valid_fields, element_type):
+        nonlocal is_valid
+        if field_name not in valid_fields:
+            logger.error(f"Layout Validation Error: {element_type} references undefined field_name '{field_name}'.")
+            is_valid = False
+
+    def check_template_vars(template, valid_fields, element_type):
+        nonlocal is_valid
+        if not template:
+            return
+        template_vars = re.findall(r'\{(.+?)\}', template)
+        for var in template_vars:
+            if var not in valid_fields:
+                logger.error(f"Layout Validation Error: {element_type} template references undefined variable '{var}'.")
+                is_valid = False
+
+    def check_mouseover_fields(mouseover, valid_fields, element_type):
+        nonlocal is_valid
+        if not mouseover:
+            return
+        for elem in mouseover.get('mouseover_elements', []):
+            field_name = elem.get('field_name')
+            if field_name not in valid_fields:
+                logger.error(f"Layout Validation Error: {element_type} mouseover references undefined field_name '{field_name}'.")
+                is_valid = False
+
+    def check_layout_overlap(layout_items):
+        nonlocal is_valid
+        grid = {}
+        for item in layout_items:
+            layout = item.get('layout')
+            if not layout or 'row' not in layout or 'column' not in layout:
+                continue
+            
+            row, col = layout['row'], layout['column']
+            width = layout.get('width', 1)
+            height = layout.get('height', 1)
+
+            for r in range(row, row + height):
+                for c in range(col, col + width):
+                    if (r, c) in grid:
+                        logger.error(f"Layout Validation Error: Overlapping layout at row={r}, col={c}. Occupied by '{grid[(r, c)]}' and new item.")
+                        is_valid = False
+                    grid[(r, c)] = item.get('field_name') or item.get('layout_type')
+
+    def check_table_widths(table_item):
+        nonlocal is_valid
+        table_name = table_item.get('table_name', 'N/A')
+        total_width = sum(col.get('width', 0) for col in table_item.get('table_column', []))
+        if total_width > 12:
+            logger.error(f"Layout Validation Error: Table '{table_name}' total column width ({total_width}) exceeds 12.")
+            is_valid = False
+
+    for section in custom_script.get('layout', []):
+        is_entry_section = section.get('entry') == 'TRUE'
+
+        valid_fields = entry_all_fields if is_entry_section else top_level_all_fields
+        valid_table_fields = entry_output_array_fields if is_entry_section else top_level_output_array_fields
+
+        for part in ['header', 'content', 'results']:
+            layout_part = section.get(part, {}).get(f'{part}layout', [])
+            check_layout_overlap(layout_part)
+
+            for item in layout_part:
+                item_type = item.get('layout_type')
+                
+                if item_type in ['FIELD', 'IMAGE', 'SERIES']:
+                    check_field_name(item.get('field_name'), valid_fields, item_type)
+                
+                elif item_type == 'DISPLAY':
+                    template = item.get('template', {}).get('template')
+                    check_template_vars(template, valid_fields, 'DISPLAY')
+                    # Validate mouseover field references for DISPLAY
+                    check_mouseover_fields(item.get('mouseover'), valid_fields, 'DISPLAY')
+                    
+                elif item_type == 'TABLE':
+                    check_table_widths(item)
+                    for col in item.get('table_column', []):
+                        template = col.get('template', {}).get('template')
+                        check_template_vars(template, valid_table_fields, 'TABLE')
+                    # Validate mouseover field references for TABLE (uses table fields)
+                    check_mouseover_fields(item.get('mouseover'), valid_table_fields, 'TABLE')
+
+                elif item_type == 'ICON':
+                    # Validate mouseover field references for ICON
+                    check_mouseover_fields(item.get('mouseover'), valid_fields, 'ICON')
+
+    if is_valid:
+        logger.info("Advanced layout validation successful.")
+    else:
+        logger.error("Advanced layout validation failed.")
+
+    return is_valid
+
+
+def main(args=[]):
+    """
+    This is the main function of the Ingenium Create/Update Custom Script utility.
+    
+    Processes a single custom script definition from either XML or JSON format.
+    Supports both XML (custom_script_schema.rnc format) and JSON (v4 OpenAPI CustomScript format) input files.
+    Each input file is expected to contain exactly one custom script definition.
+    File type is automatically detected and the appropriate parser is used.
+
+    Parameters
+    ----------
+    args
+        Array of input arguments. Used when this function is called from another Python module.
+
+    Returns
+    -------
+        None
+    """
+    # Gets initial input
+    inputs = get_input(args)
+
+    # Determine base path from command line argument or environment variable
+    base_path = None
+    if inputs.base_path:
+        base_path = inputs.base_path
+        logger.info(f"Using base path from command line argument: {base_path}")
+    elif os.environ.get('ING_CS_BASE_PATH'):
+        base_path = os.environ.get('ING_CS_BASE_PATH')
+        logger.info(f"Using base path from environment variable ING_CS_BASE_PATH: {base_path}")
+    else:
+        msg = "Base path is required. Please specify via --base_path argument or ING_CS_BASE_PATH environment variable."
+        logger.error(msg)
+        raise common.IngeniumLibError(msg)
+    
+    # Validate base path exists
+    if not os.path.exists(base_path):
+        msg = f"Specified base path does not exist: {base_path}"
+        logger.error(msg)
+        raise common.IngeniumLibError(msg)
+
+    # Validate input file exists
+    if not os.path.exists(inputs.input_file):
+        msg = f"Input file not found: {inputs.input_file}"
+        logger.error(msg)
+        raise common.IngeniumLibError(msg)
+
+    # Detect file type
+    try:
+        file_type = detect_file_type(inputs.input_file)
+        logger.info(f"Detected file type: {file_type}")
+    except ValueError as e:
+        msg = f"Error detecting file type for {inputs.input_file}: {e}"
+        logger.error(msg)
+        raise common.IngeniumLibError(msg)
+
+    # if ssl_ca_bundle is specified, it will take precedence over ignore_ssl_error
+    if inputs.ssl_ca_bundle is not None:
+        common.ssl_verify = inputs.ssl_ca_bundle
+    else:
+        common.ssl_verify = not inputs.ignore_ssl_error
+        if not common.ssl_verify:
+            # To suppress SSL warnings
+            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+    logger.debug(f"Ingenium.ssl_verify:{common.ssl_verify}")
+
+    if inputs.username:
+        username = inputs.username
+    else:
+        username = getpass.getuser()
+
+    logger.info(f"Processing custom script file: {inputs.input_file}")
+
+    # Parse the input file based on type
+    try:
+        if file_type == 'xml':
+            custom_script = parse_custom_script_xml(inputs.input_file, base_path)
+            logger.info(f"Successfully parsed custom script from XML file")
+        elif file_type == 'json':
+            custom_script = parse_custom_script_json(inputs.input_file, base_path)
+            logger.info(f"Successfully parsed custom script from JSON file")
+        else:
+            msg = f"Unsupported file type: {file_type}"
+            logger.error(msg)
+            raise common.IngeniumLibError(msg)
+    except Exception as e:
+        msg = f"Failed to parse {file_type.upper()} file {inputs.input_file}: {e}"
+        logger.error(msg)
+        raise common.IngeniumLibError(msg)
+
+    if inputs.output_json_file:
+        try:
+            with open(inputs.output_json_file, 'w', encoding='utf-8') as f:
+                json.dump(custom_script, f, ensure_ascii=False, indent=4)
+            logger.info(f"Successfully saved custom script JSON to {inputs.output_json_file}")
+        except Exception as e:
+            logger.warning(f"Could not save custom script JSON to {inputs.output_json_file}: {e}")
+
+    if inputs.rsa:
+        pw_prompt = f"Enter RSA Passcode for {username}:"
+    else:
+        pw_prompt = f"Enter LDAP Password for {username}:"
+
+    # Login to server
+    login = common.authenticate(inputs.server, username=username, password=getpass.getpass(pw_prompt), force=True,
+                                  rsa=inputs.rsa)
+
+    if not login:
+        msg = f"Failure to Login to: {inputs.server} - Can not proceed. Exiting."
+        logger.error(msg)
+        raise common.IngeniumLibError(msg)
+
+    # Get existing custom scripts to check for updates vs creates
+    try:
+        existing_scripts = get_custom_scripts(inputs.server, api_version='v4')
+        existing_script_ids = {script.get('script_id'): script for script in existing_scripts if script.get('script_id')}
+        logger.info(f"Found {len(existing_scripts)} existing custom scripts on server")
+        logger.debug(f"Existing script IDs: {list(existing_script_ids.keys())}")
+    except Exception as e:
+        logger.warning(f"Could not retrieve existing custom scripts: {e}")
+        existing_script_ids = {}
+
+    # Process the custom script
+    script_name = custom_script.get('script_name')
+    script_id = custom_script.get('script_id')
+    
+    logger.info(f"Processing custom script: {script_name} (ID: {script_id})")
+    
+    # Validate script data before processing
+    if not validate_script_data(custom_script):
+        msg = f"Invalid script data for: {script_name}"
+        logger.error(msg)
+        raise common.IngeniumLibError(msg)
+    
+    try:
+        # Determine if this is an update or create operation based on script_id only
+        if script_id and script_id in existing_script_ids:
+            # Update existing script
+            logger.info(f"Updating existing custom script: {script_name} (ID: {script_id})")
+            result = update_custom_script(inputs.server, script_id, custom_script)
+            logger.info(f"Successfully updated custom script: {script_name}")
+            if inputs.verify_update:
+                compare_configs(custom_script, result)
+        else:
+            # Create new script
+            logger.info(f"Creating new custom script: {script_name} (ID: {script_id})")
+            result = create_custom_script(inputs.server, [custom_script])
+            logger.info(f"Successfully created custom script: {script_name}")
+            if inputs.verify_update:
+                compare_configs(custom_script, result)
+            
+    except Exception as e:
+        msg = f"Failed to process custom script {script_name}: {e}"
+        logger.error(msg)
+        raise common.IngeniumLibError(msg)
+
+    if inputs.validate_layout:
+        logger.info("Running in layout validation mode.")
+        if not validate_advanced_layout(custom_script):
+            raise common.IngeniumLibError("Layout validation failed. See log for details.")
+        else:
+            logger.info("Layout validation passed. Exiting.")
+            return
+
+    logger.info("Custom script processing completed successfully")
+
+
+if __name__ == '__main__':
+    try:
+        main()
+    except common.IngeniumLibError:
+        logger.error("Ingenium Create/Update Custom Script has encountered an error and needs to exit. Please check the log messages for the source of the error.")
+    except Exception as e:
+        logger.error(f"Unexpected error: {e}")
+        logger.error("Ingenium Create/Update Custom Script has encountered an error and needs to exit.")
+
