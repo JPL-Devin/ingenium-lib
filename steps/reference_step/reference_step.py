@@ -1,8 +1,8 @@
 
 '''
-This is an example of Ingenium custom script that can be used as a template for a new script.
+This is reference Ingenium Custom Script it intended as a demo of the capabilities in a custom script
+ and as a template to follow for implementation.
 
-<Add your description of said script>
 
 Authors:
     * Chris Swan 
@@ -10,28 +10,112 @@ Authors:
 
 '''
 
-
+import os
 import time
+from datetime import datetime, timedelta
 import copy
+import os
+import matplotlib.pyplot as plt
+import random
+from ing_lib.logs import init_console_logger, get_logger
+init_console_logger()
+logger = get_logger(__name__)
 
-# Note that the import order is important here - script utils comes last (otherwise the logging doesn't work)
+from ing_lib.steps import *
 
-# Note: ing_venue_utils is supported only for Python 2.7 currently.
-# from ingenium_cs.script_utils.ing_venue_utils import get_eha, get_evr, send_fsw_cmd, start_mtak
-from ingenium_cs.script_utils.chill_utils import query_evr
-from ingenium_cs.script_utils.utils import get_input_output_paths, read_input_file, write_output_file, custom_script_log
+GRAPH_FILE_NAME = 'sample_graph.png'
 
+def plot_series(series: list, output_dir: str,
+                     png_name: str = GRAPH_FILE_NAME):
+    """
+    Plot **all** channel time‑series on a single figure and save as PNG.
+
+    Parameters
+    ----------
+    series : list[dict]
+        List of channel dictionaries built earlier (each contains
+        ``name``, ``color`` and ``data`` = [(dn, ert), …]).
+    output_dir : str
+        Directory where the PNG will be written.
+    png_name : str, optional
+        Filename (without path) for the combined plot.
+    """
+    if not os.path.isdir(output_dir):
+        os.makedirs(output_dir, exist_ok=True)
+
+    plt.figure(figsize=(12, 6))
+
+    plotted_any = False   # <-- will stay False if no channel has valid points
+
+    # Iterate over every channel, plotting its points
+    for ch in series:
+        chan_id = ch.get("name", "unknown")
+        colour  = ch.get("color", "#000000")
+        raw_data = ch.get("data", [])
+
+        dn_vals = []
+        ert_vals = []
+
+        for point in raw_data:
+            if not isinstance(point, (list, tuple)) or len(point) != 2:
+                continue
+            dn, ert = point
+            try:
+                ert_dt= datetime.strptime(ert, "%Y-%jT%H:%M:%S.%f")
+            except Exception as exc:
+                logger.debug(f"Could not parse ERT '{ert}' for channel {chan_id}: {exc}")
+                continue
+
+            dn_vals.append(float(dn))
+            ert_vals.append(ert_dt)
+
+        if not dn_vals:
+            logger.warning(f"No valid telemetry points for channel {chan_id}; skipping plot.")
+            continue
+
+        # Plot this channel’s line (with markers for visibility)
+        plt.plot(ert_vals, dn_vals,
+                 color=colour,
+                 linewidth=2,
+                 marker='o',
+                 markersize=4,
+                 label=f"Channel {chan_id}")
+        plotted_any = True  # at least one line was drawn
+
+    # ------------------------------------------------------------------
+    # Only add a legend if something was actually plotted.
+    # ------------------------------------------------------------------
+    if plotted_any:
+        plt.title("Telemetry – DN vs. Earth Return Time (All Channels)")
+        plt.xlabel("Earth Return Time (ERT)")
+        plt.ylabel("DN Value")
+        plt.grid(True, which="both", ls="--", lw=0.5, alpha=0.7)
+        plt.legend(title="Channels", loc="best", fontsize="small")
+        plt.gcf().autofmt_xdate()
+        plt.tight_layout()
+    else:
+        # Still produce a minimal figure so the PNG exists, but warn the user.
+        plt.title("No valid telemetry data to display")
+        plt.axis('off')  # hide axes
+
+    # Save the combined image
+    png_path = os.path.join(output_dir, png_name)
+    plt.savefig(png_path, dpi=300)
+    plt.close()
+
+    logger.info(f"Saved combined telemetry plot → {png_path}")
 
 if __name__ == '__main__':
 
+
     # Locate the custom script input file
-    error_msg = 'USAGE: python template.py input_file_path output_file_path'
+    error_msg = 'USAGE: python reference_step.py input_file_path output_file_path'
     input_file_abs_path, output_file_abs_path = get_input_output_paths(error_msg)
-    custom_script_log.info('input_file_abs_path: %s' % input_file_abs_path)
-    custom_script_log.info('output_file_abs_path: %s' % output_file_abs_path)
+    logger.info(f'input_file_abs_path: {input_file_abs_path}')
+    logger.info(f'output_file_abs_path: {output_file_abs_path}')
 
     # Read the input file
-    custom_script_log.info('Reading custom script inputs')
+    logger.info('Reading custom script inputs')
     input_dict = read_input_file(input_file_abs_path)
 
     # Initialize the Output Data
@@ -42,38 +126,48 @@ if __name__ == '__main__':
     Note that this varies per script (as the outputs vary)
     '''
 
-    # Example Code
-    # Users should modify this based on their inputs/outputs.
 
     # Initialize output data
     inputs = copy.deepcopy(input_dict.get('inputs', []))
+    variables = input_dict.get('variables', {})
+    telemetry= copy.deepcopy(variables.get('telemetry', {}))
+    parameters=copy.deepcopy(variables.get('parameters', {}))    
     entries = copy.deepcopy(input_dict.get('entries', {}))
     outputs = {
-        'output_1': 0,
-        'output_2': 0
+        'start_time': '',
+        'query_start': '',
+        'query_end': '',
+        'file_output': '',
+        'image_output': '',
+        'series_output': '',
     }
-    output_array = []
+
+    my_output_array = []
 
     output_dict = {
         'custom_script_status': 'PENDING',
         'inputs': inputs,
         'entries': entries,
         'outputs': outputs,
-        'output_array': output_array
+        'output_array': my_output_array
     }
 
     # Step through each entry and initialize the outputs
     for i, entry in enumerate(entries):
         entry['verification_status'] = 'PENDING'
         entry['entry_outputs'] = {
-            'entry_output_1': '0',
-            'entry_output_2': '0'
+            'entry_output_1': 0,   # INT
+            'entry_output_2': 0.0, # FLOAT
+            'entry_output_3': 0,   # INT
+            'entry_output_4': 0.0, # FLOAT
+            'entry_output_5': 0.0, # FLOAT
+            'entry_output_6': 0,   # INT
         }
         entry['entry_output_array'] = []
 
     # Write initial output
     write_output_file(output_dict, output_file_abs_path)
-    custom_script_log.info('Output file was initialized')
+    logger.info('Output file was initialized')
 
     '''
     Add the custom script logic here
@@ -81,8 +175,25 @@ if __name__ == '__main__':
         - Program defensibly (use try/except, think about what happens if actions fail)
         - Update the output_dict as you go and save it when new results are available (this will provide visibility while it is executing)
         - Log the actions - it helps with visibility and troubleshooting
-        - Remember that the script will be running as an application user - not you
+        - Remember that the script will likley be running as an application user - not as you
     '''
+
+    '''
+    The following code builds random ouputs for the script
+    '''
+
+    # Convert the start_time to a datetime object
+    start_time = datetime.strptime(inputs['start_time'], '%Y-%jT%H:%M:%S.%f')
+    
+    # Compute the query range
+    query_start = start_time - timedelta(seconds=inputs['lookback'])
+    query_end = start_time + timedelta(seconds=inputs['timeout'])
+    
+    # Update the query range in the outputs
+    outputs['start_time_date_time'] = start_time.strftime('%Y-%jT%H:%M:%S.%f')
+    outputs['query_start'] = query_start.strftime('%Y-%jT%H:%M:%S.%f')
+    outputs['query_end'] = query_end.strftime('%Y-%jT%H:%M:%S.%f')
+
     # Populate output values
     for i, entry in enumerate(entries):
         entry['verification_status'] = 'PASS'
@@ -90,7 +201,7 @@ if __name__ == '__main__':
         entry['entry_outputs']['entry_output_2'] = '' + str(10*i)
 
         entry_output_array = entry['entry_output_array']
-        for j in range(5):
+        for j in range(random.randint(2,6)):
             elem = {
                 'entry_output_array_field_1': '' + str(j),
                 'entry_output_array_field_2': '' + str(10*j),
@@ -98,22 +209,52 @@ if __name__ == '__main__':
             entry_output_array.append(elem)
         
         write_output_file(output_dict, output_file_abs_path)
-        custom_script_log.info('Entry was added: %s' % i)
+        logger.info(f'Entry was added: {i}')
             
         time.sleep(1)
 
-    # set outputs        
-    outputs['output_1'] = '101'
-    outputs['output_2'] = '102'
-    
-    # set ouput array
-    for i in range(10):
+    # Populate my_output_array (top‑level) with the defined fields
+    for i in range(random.randint(2,15)):
         item = {
-            'output_array_field_1': str(i),
-            'output_array_field_2': str(10*i),
-        }               
+            'output_array_field_1': i,               # INT
+            'output_array_field_2': float(10 * i),   # FLOAT
+            'output_array_field_3': float(20 * i),   # FLOAT
+            'output_array_field_4': i * 2,           # INT
+            'output_array_field_5': i * 3,           # INT
+            'output_array_field_6': float(30 * i),   # FLOAT
+            'output_array_field_7': i * 4,           # INT
+        }
+        my_output_array.append(item)
 
-        output_array.append(item)        
+    # Build a series
+
+    series= {'series' :[
+                {
+                'name': 'BATMAN',
+                'series_type': 'HORIZONTAL',
+                'timetype': 'Earth Return Time',
+                'color': '#499894',
+                'data': []
+                },
+                {
+                'name': 'ROBIN',
+                'series_type': 'HORIZONTAL',
+                'timetype': 'Earth Return Time',
+                'color': '#FF0000',
+                'data': []
+                }
+            ]
+    }
+    for s in series['series']:
+        for i in range(random.randint(8,20)):
+            time = start_time + timedelta(seconds=i*random.randint(1,10))
+            value = random.randrange(3,14)
+            s['data'].append((value,time.strftime('%Y-%jT%H:%M:%S.%f')))
+
+      
+        s['data'].sort(key=lambda pt: datetime.strptime(pt[1], '%Y-%jT%H:%M:%S.%f'))
+
+
 
 
     '''
@@ -136,9 +277,16 @@ if __name__ == '__main__':
 
     output_dict['custom_script_status'] = 'PASS'
 
-    msg = 'template.py has run to completion with overall status: %s' % custom_script_status
-    custom_script_log.info(msg)
+    msg = f'reference_step.py has run to completion with overall status: {custom_script_status}' 
+    logger.info(msg)
     output_dict['custom_script_status'] = custom_script_status
+
+    # Write any series or image data
+    output_dir = os.path.dirname(output_file_abs_path)
+    write_series_file(series,output_dir)
+
+   # Write image of channels graphed
+    plot_series(series['series'], output_dir)
 
     # Report Final custom_script_status
     write_output_file(output_dict, output_file_abs_path)
