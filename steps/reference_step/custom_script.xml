@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--' If you are using an XML editor - like oXygen - update the next line to point to your local schema copy '-->
+<?xml-model href="file:../../reference/custom_script_schema.rnc" type="application/relax-ng-compact-syntax"?>
+<!--' This Reference Script/Step assumes the use of the advanced layout functionality. '-->
+<custom-scripts>
+    <!-- mission name is a string defined for each project -->
+    <header mission_name="Test"></header>
+    <!--' The ProjConfigCreateUpdateCS.py script will populate the hash/id for each script, and will update the path per the base Ingenium path.'-->
+    <!--' Script path should be the relative path to the script file with respect to the custom script xml (typically stored in the same directory '-->
+    <custom_script script_name="template" script_path="reference_step.py" description="Template script" hash="SHA256 Hash of your script - populated by create_catalog.py" script_id="unique id of your script - populated by create_catalog.py">
+        <!--' Custom Scripts/Step first document all the inputs/outputs the script accepts/produces '-->
+        
+        <!--' Time is a common general input (e.g. establishes the time range for when to look for telemetry'-->
+        <!--' In the UI time is represented as a list of procedure relative times '-->
+        <!--' It is passed to the client agent as DOY formatted datetime string %Y-%jT%H:%M:%S'-->
+        <input_field name="start_time" description="Start Time" phase="AUTHORING" required="YES" type="TIME" default_value="CURRENT_TIME"></input_field>
+        
+        <!--' A Timeout is also a common input used with time - controlling when a step times out and returns'-->
+        <input_field name="timeout" description="Time Out" phase="AUTHORING" required="YES" type="INT" default_value="60"></input_field>
+        
+        <!--' A Lookback is also a common input used with time - providing a negative offset for queries based on start time'-->
+        <input_field name="lookback" description="Look Back" phase="AUTHORING" required="YES" type="INT" default_value="60"></input_field>
+
+        <!--' A Datapath is a way to abstract a pointer to a specific instance or stream of data in the AMPCS ground data syste'-->
+        <!--' These are initialized via the Manual GDS step which maps a Datapath string to a specific integer session id and then this relationship mapsA Datapath is a way to abstract a pointer to a specific instance or stream of data in the AMPCS ground data syste'-->
+        <input_field name="datapath" description="Data Path" phase="AUTHORING" required="YES" type="DATA_PATH"></input_field>
+
+        <!--' A Flight Command is comma seperated string of command stem and command arguments.'-->
+        <!--' It has a special UI/UX component that provides autocomplete, lookup, and a command builder based the selected dictionary.'-->
+        <input_field name="flight_cmd" description="Flight Command" phase="AUTHORING" required="YES" type="FLIGHT_COMMAND"></input_field>
+        
+        <!--' A Sim Command is a comma seperated string of command stem and command arguments.'-->
+        <!--' It has a special UI/UX component that provides autocomplete, lookup, and a command builder based the selected dictionary.'-->
+        <input_field name="sim_cmd" description="Flight Command" phase="AUTHORING" required="YES" type="SIM_COMMAND"></input_field>
+        
+        <!--' An execution phase input can not be populated ahead of time, and the contents are not under CM/Redline/Blueline'-->
+        <!--' Note that the precense of an execution phase input will make automatic execution of the step halt.'-->
+        <input_field name="measured_volts" description="Measured Volts" phase="EXECUTION" required="NO" type="FLOAT" default_value="60"></input_field>
+        
+        <!--' Strings capture a plain text string. Often used to specify a file path on the agent computer '-->
+        <input_field name="file_loc" description="Full path to target file" phase="AUTHORING" required="NO" type="FLOAT" default_value="60"></input_field>     
+        
+        <!--' A Lookback is also a common input used with time - providing a negative offset for queries based on start time'-->
+        
+        <!--' An entry is a repeating section of identical inputs/outputs, each with its own dedicated pass/fail status. '-->
+        <!--' There can be a single entry definition per step (but it could be repeated many times) '-->      
+        <!--' Entries can have inputs, ouputs, and output arrays '-->
+        <!--' The value that Ingenium will display at the summary value is the display_value which should correspond to an output field in the entry'-->
+        
+        <script_entry>
+            
+            <!--' A Flight Channel is a comma seperated string of channel_id,channel name.'-->
+            <!--' It has a special UI/UX component that provides autocomplete and lookup of either ID or name based on the  selected dictionary.'-->
+            <input_field name="flight_channel" description="Flight Channel" phase="AUTHORING" required="YES" type="FLIGHT_TELEM" ></input_field>
+            
+            <!--' A SIM Channel is a comma seperated string of channel_id,channel name.'-->
+            <!--' It has a special UI/UX component that provides autocomplete and lookup of either ID or name based on the  selected dictionary.'-->
+            <input_field name="sim_channel" description="Sim Channel" phase="AUTHORING" required="YES" type="SIM_TELEM" ></input_field>
+            
+            <!--' A Flight EVR is string of EVR name.'-->
+            <!--' It has a special UI/UX component that provides autocomplete and lookup of evr name based on the  selected dictionary.'-->
+            <input_field name="flight_evr" description="Flight EVR" phase="AUTHORING" required="YES" type="FLIGHT_EVR" ></input_field>
+
+            <!--' A SIM EVR is string of EVR name.'-->
+            <!--' It has a special UI/UX component that provides autocomplete and lookup of evr name based on the selected dictionary.'-->
+            <input_field name="sim_evr" description="SIM EVR" phase="AUTHORING" required="YES" type="SIM_EVR" ></input_field>
+            
+            <!--' It has a special UI/UX component that provides autocomplete and lookup of evr name based on the selected dictionary.'-->
+            <!--' Represented as a checkbox in the UI.'-->
+            <input_field name="bool" description="Include in Series" phase="AUTHORING" required="YES" type="BOOL" ></input_field>
+
+            <!--' It has a special UI/UX component that provides autocomplete and lookup of evr name based on the selected dictionary.'-->
+            <input_field name="sim_evr" description="SIM EVR" phase="AUTHORING" required="YES" type="SIM_EVR" ></input_field>
+          
+            <!--' Enumerations are strings, limited by a known list of symbolics/enumerations '-->
+            <input_field name="enumerated_input" description="Enumerated Input" phase="AUTHORING" required="YES" type="ENUM" default_value="ENUM_CHOICE_1"> 
+                <!--' Add your enumerated choices if the type = "enum" '-->
+                <enumeration>
+                    <enum symbolic="ENUM_CHOICE_1"></enum>
+                    <enum symbolic="ENUM_CHOICE_2"></enum>
+                </enumeration>
+            </input_field>
+          
+            <!--' Verification condition is a special Ingenium input that captures a operator (GREATER_THAN, LESS_THAN, etc) and 0-2 values depending on conditions. '-->
+            <!--' Has a specific UI/UX implementation and is captured as a CSV string <operator,value,value,value> . '-->
+            <input_field name="verification_cond" description="SIM EVR" phase="AUTHORING" required="YES" type="VERIFICATION_COND" ></input_field>          
+          
+          
+            <output_field description="entry_output_1" name="entry_output_1" type="INT"/>
+            <output_field description="entry_output_2" name="entry_output_2" type="FLOAT"/>
+            <output_field description="entry_output_3" name="entry_output_3" type="INT"/>
+            <output_field description="entry_output_4" name="entry_output_4" type="FLOAT"/>
+            <output_field description="entry_output_5" name="entry_output_5" type="FLOAT"/>
+            <output_field description="entry_output_6" name="entry_output_6" type="INT"/>
+          
+            <!--' Output arrays are arrays of N rows/entries of a specified set of fields '-->
+            <output_array description="Entry output array" name="my_entry_output_array" max_entries="10">
+                <output_array_field name="entry_output_array_field_1" description="Field 1 of entry output array" type="INT" ></output_array_field>
+                <output_array_field name="entry_output_array_field_2" description="Field 2 of entry output array" type="STRING" ></output_array_field>
+            </output_array>
+        </script_entry>
+        
+        <output_field description="Start time (in DOY format) of the reference time" name="start_time" type="STRING"/>
+        <output_field description="Start time (in DOY format) of the query" name="query_start" type="STRING"/>
+        <output_field description="End time (in DOY format) of the query" name="query_end" type="STRING"/>
+        
+        <!--' Files created in the working directory of script/step can be relayed back to to the Ingenium server and made available for downlink.'-->
+        <!--' This could be used for specific outputs from the test vehicle e.g. XLSX/CSV or binary files.'-->
+        <output_field name="file_output" description="Sample File" type="FILE"/>
+                
+        <!--' Image files created in the working directory of script/step can be relayed back to to the Ingenium server and displayed in the UI'-->
+        <output_field name="image_output" description="Sample Image Output" type="IMAGE"/>
+        
+        <!--' A series output is a time series data set of one or more variables and information how to display name. '-->
+        <!--' Data is saved in the series.json file in the working directory of the script/step and is displayed in an interactive graph in the UI'-->
+        <output_field name="series_output" description="Sample Image Output" type="SERIES"/>
+        
+        <output_array name="my_output_array" description="Output array variable. Only one output array is supported." max_entries="10">
+            <output_array_field name="output_array_field_1" description="Field 1 of output array" type="INT" ></output_array_field>
+            <output_array_field name="output_array_field_2" description="Field 2 of output array" type="FLOAT" ></output_array_field>
+            <output_array_field name="output_array_field_3" description="Field 3 of output array" type="FLOAT" ></output_array_field>
+            <output_array_field name="output_array_field_4" description="Field 4 of output array" type="INT" ></output_array_field>
+            <output_array_field name="output_array_field_5" description="Field 5 of output array" type="INT" ></output_array_field>
+            <output_array_field name="output_array_field_6" description="Field 6 of output array" type="FLOAT" ></output_array_field>
+            <output_array_field name="output_array_field_7" description="Field 7 of output array" type="INT" ></output_array_field>            
+        </output_array>
+    </custom_script>
+</custom-scripts>

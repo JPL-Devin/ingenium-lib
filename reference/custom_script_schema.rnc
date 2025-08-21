@@ -66,6 +66,7 @@ custom-script-def = element custom_script {
   input-field-def*,
   # Entries are (possibly) repeating structure that has inputs, outputs, and an associated stauts
   # If defined they require at least one to be populated
+  # Only one entry can be defined per step.
   script-entry-def?,
   # List of output fields the script produces
   output-field-def*,
@@ -102,7 +103,7 @@ input-field-def = element input_field {
     # Whether the input is required or optional
     attribute required {"YES" | "NO"},
     # Type of the argument. Note that that there are special "Ingenium types" which will cause Ingenium to
-    # accept multiple formats and or do variable substitution.
+    # accept multiple formats and or do variable substitution. The type also impacts the layout/UI.
     attribute type {input-types-def},
     # Default input value
     # Will be used to pre-populate the input field if provided
@@ -123,6 +124,7 @@ output-field-def = element output_field {
     # Must be unique within a script
     attribute name {name_format},
     # How the field is displayed in the ui (if not provided will use field name)
+    # Note that this is ignored if the advanced layout is populated
     attribute display_name {xsd:token}?,
     # Description of the output field
     attribute description {text},
@@ -138,19 +140,20 @@ output-array-field-def = element output_array_field {
     # Must be unique within a script
     attribute name {name_format},
     # How the field is displayed in the ui (if not provided will use field name)
+    # Note that this is ignored if the advanced layout is populated
     attribute display_name {xsd:token}?,
     # Description of the output field
     attribute description {text},
     # Type of output
     attribute type {output-types-def},
     # Visible in the array table (or just in details)
+    # Note that this is ignored if the advanced layout is populated
     attribute visible {"YES" | "NO"}?
 }
 
 script-entry-def = element script_entry {
-    # An entry is a set of inputs and outputs with its own pass/fail status
+    # An entry is a repeating section of identical inputs/outputs, each with its own dedicated pass/fail status.
     # Entrys can be added/removed but at least one must be specified
-    # This mimics the behavior in verifyEHA, WaitEVR, etc. 
     
     # One or more inputs 
     input-field-def+,
@@ -165,6 +168,7 @@ script-entry-def = element script_entry {
     
     # Display Value - this is the output value that will be display 
     # Must match the name of one of the output fields
+    # Note that this is ignored if the advanced layout is populated
     attribute display_value {name_format}?
 }
 

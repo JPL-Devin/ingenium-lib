@@ -1,0 +1,121 @@
+{
+    "custom_script_status": "PASS",
+    "entries": [
+        {
+            "entry_inputs": {
+                "entry_input_1": "ENUM_CHOICE_1",
+                "entry_input_2": "3"
+            },
+            "entry_output_array": [
+                {
+                    "entry_output_array_field_1": "0",
+                    "entry_output_array_field_2": "0"
+                },
+                {
+                    "entry_output_array_field_1": "1",
+                    "entry_output_array_field_2": "10"
+                },
+                {
+                    "entry_output_array_field_1": "2",
+                    "entry_output_array_field_2": "20"
+                },
+                {
+                    "entry_output_array_field_1": "3",
+                    "entry_output_array_field_2": "30"
+                },
+                {
+                    "entry_output_array_field_1": "4",
+                    "entry_output_array_field_2": "40"
+                }
+            ],
+            "entry_outputs": {
+                "entry_output_1": "0",
+                "entry_output_2": "0"
+            },
+            "verification_status": "PASS"
+        },
+        {
+            "entry_inputs": {
+                "entry_input_1": "ENUM_CHOICE_2",
+                "entry_input_2": "3"
+            },
+            "entry_output_array": [
+                {
+                    "entry_output_array_field_1": "0",
+                    "entry_output_array_field_2": "0"
+                },
+                {
+                    "entry_output_array_field_1": "1",
+                    "entry_output_array_field_2": "10"
+                },
+                {
+                    "entry_output_array_field_1": "2",
+                    "entry_output_array_field_2": "20"
+                },
+                {
+                    "entry_output_array_field_1": "3",
+                    "entry_output_array_field_2": "30"
+                },
+                {
+                    "entry_output_array_field_1": "4",
+                    "entry_output_array_field_2": "40"
+                }
+            ],
+            "entry_outputs": {
+                "entry_output_1": "1",
+                "entry_output_2": "10"
+            },
+            "verification_status": "PASS"
+        }
+    ],
+    "inputs": {
+        "input_1": "1",
+        "input_2": "2"
+    },
+    "output_array": [
+        {
+            "output_array_field_1": "0",
+            "output_array_field_2": "0"
+        },
+        {
+            "output_array_field_1": "1",
+            "output_array_field_2": "10"
+        },
+        {
+            "output_array_field_1": "2",
+            "output_array_field_2": "20"
+        },
+        {
+            "output_array_field_1": "3",
+            "output_array_field_2": "30"
+        },
+        {
+            "output_array_field_1": "4",
+            "output_array_field_2": "40"
+        },
+        {
+            "output_array_field_1": "5",
+            "output_array_field_2": "50"
+        },
+        {
+            "output_array_field_1": "6",
+            "output_array_field_2": "60"
+        },
+        {
+            "output_array_field_1": "7",
+            "output_array_field_2": "70"
+        },
+        {
+            "output_array_field_1": "8",
+            "output_array_field_2": "80"
+        },
+        {
+            "output_array_field_1": "9",
+            "output_array_field_2": "90"
+        }
+    ],
+    "outputs": {
+        "output_1": "101",
+        "output_2": "102"
+    }
+}
