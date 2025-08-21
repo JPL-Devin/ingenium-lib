@@ -69,9 +69,6 @@
             <!--' Represented as a checkbox in the UI.'-->
             <input_field name="bool" description="Include in Series" phase="AUTHORING" required="YES" type="BOOL" ></input_field>
 
-            <!--' It has a special UI/UX component that provides autocomplete and lookup of evr name based on the selected dictionary.'-->
-            <input_field name="sim_evr" description="SIM EVR" phase="AUTHORING" required="YES" type="SIM_EVR" ></input_field>
-          
             <!--' Enumerations are strings, limited by a known list of symbolics/enumerations '-->
             <input_field name="enumerated_input" description="Enumerated Input" phase="AUTHORING" required="YES" type="ENUM" default_value="ENUM_CHOICE_1"> 
                 <!--' Add your enumerated choices if the type = "enum" '-->
@@ -84,7 +81,6 @@
             <!--' Verification condition is a special Ingenium input that captures a operator (GREATER_THAN, LESS_THAN, etc) and 0-2 values depending on conditions. '-->
             <!--' Has a specific UI/UX implementation and is captured as a CSV string <operator,value,value,value> . '-->
             <input_field name="verification_cond" description="SIM EVR" phase="AUTHORING" required="YES" type="VERIFICATION_COND" ></input_field>          
-          
           
             <output_field description="entry_output_1" name="entry_output_1" type="INT"/>
             <output_field description="entry_output_2" name="entry_output_2" type="FLOAT"/>
@@ -100,7 +96,7 @@
             </output_array>
         </script_entry>
         
-        <output_field description="Start time (in DOY format) of the reference time" name="start_time" type="STRING"/>
+        <output_field description="Start time (in DOY format) of the reference time" name="start_time_date_time" type="STRING"/>
         <output_field description="Start time (in DOY format) of the query" name="query_start" type="STRING"/>
         <output_field description="End time (in DOY format) of the query" name="query_end" type="STRING"/>
         
