@@ -6,8 +6,8 @@
     <!-- mission name is a string defined for each project -->
     <header mission_name="Test"></header>
     <!--' The ProjConfigCreateUpdateCS.py script will populate the hash/id for each script, and will update the path per the base Ingenium path.'-->
-    <!--' Script path should be the relative path to the script file with respect to the custom script xml (typically stored in the same directory '-->
-    <custom_script script_name="template" script_path="reference_step.py" description="Template script" hash="SHA256 Hash of your script - populated by create_catalog.py" script_id="unique id of your script - populated by create_catalog.py">
+    <!--' Script path should be the relative path to the script file with respect to the custom script xml (typically stored in the same directory) '-->
+    <custom_script script_name="reference_step" script_path="reference_step.py" description="Reference Script" hash="SHA256 Hash of your script - populated by create_catalog.py" script_id="unique id of your script - populated by create_catalog.py">
         <!--' Custom Scripts/Step first document all the inputs/outputs the script accepts/produces '-->
         
         <!--' Time is a common general input (e.g. establishes the time range for when to look for telemetry'-->
@@ -38,7 +38,7 @@
         <input_field name="measured_volts" description="Measured Volts" phase="EXECUTION" required="NO" type="FLOAT" default_value="60"></input_field>
         
         <!--' Strings capture a plain text string. Often used to specify a file path on the agent computer '-->
-        <input_field name="file_loc" description="Full path to target file" phase="AUTHORING" required="NO" type="FLOAT" default_value="60"></input_field>     
+        <input_field name="file_loc" description="Full path to target file" phase="AUTHORING" required="NO" type="STRING" default_value="/home/user/file.txt"></input_field>     
         
         <!--' A Lookback is also a common input used with time - providing a negative offset for queries based on start time'-->
         
@@ -80,7 +80,7 @@
           
             <!--' Verification condition is a special Ingenium input that captures a operator (GREATER_THAN, LESS_THAN, etc) and 0-2 values depending on conditions. '-->
             <!--' Has a specific UI/UX implementation and is captured as a CSV string <operator,value,value,value> . '-->
-            <input_field name="verification_cond" description="SIM EVR" phase="AUTHORING" required="YES" type="VERIFICATION_COND" ></input_field>          
+            <input_field name="verification_cond" description="Verification Condition" phase="AUTHORING" required="YES" type="VERIFICATION_COND" ></input_field>          
           
             <output_field description="entry_output_1" name="entry_output_1" type="INT"/>
             <output_field description="entry_output_2" name="entry_output_2" type="FLOAT"/>
@@ -120,5 +120,158 @@
             <output_array_field name="output_array_field_6" description="Field 6 of output array" type="FLOAT" ></output_array_field>
             <output_array_field name="output_array_field_7" description="Field 7 of output array" type="INT" ></output_array_field>            
         </output_array>
+        <advanced_layout>
+            <section>
+                <section_header>
+                    <layout_display>
+                        <template template="Sending Commands and Files via {datapath}"></template>
+                        <layout row="1" column="1" width="4" height="1" align="LEFT"></layout>
+                    </layout_display>
+                    <layout_display>
+                        <template template="at {start_time}"></template>
+                        <mouseover_display>
+                            <mouseover_element field_name="start_time_date_time" display_name="Start Time"></mouseover_element>
+                        </mouseover_display>
+                        <layout row="1" column="4" width="2" height="1" align="LEFT"></layout>
+                    </layout_display>
+                    <layout_display>
+                        <template template="and then querying for results."></template>
+                        <mouseover_display>
+                            <mouseover_element field_name="query_start" display_name="Query Start"></mouseover_element>
+                            <mouseover_element field_name="query_end" display_name="Query End"></mouseover_element>
+                        </mouseover_display>
+                        <layout row="1" column="6" width="4" height="1" align="LEFT"></layout>
+                    </layout_display>
+                    <layout_field field_name="measured_volts">
+                        <label label_content="Volts" label_loc="LEFT" label_align="CENTER"></label>
+                        <layout row="1" column="10" width="2" height="1" align="LEFT"></layout>
+                    </layout_field>
+                </section_header>
+                <section_content>
+                    <layout_field field_name="start_time">
+                        <label label_content="Start Time" label_loc="TOP" label_align="CENTER"></label>
+                        <layout row="1" column="1" width="3" height="1" align="LEFT"></layout>
+                    </layout_field>
+                    <layout_field field_name="timeout">
+                        <label label_content="Timeout (s)" label_loc="TOP" label_align="CENTER"></label>
+                        <layout row="1" column="4" width="3" height="1" align="LEFT"></layout>
+                    </layout_field>
+                    <layout_field field_name="lookback">
+                        <label label_content="Lookback (s)" label_loc="TOP" label_align="CENTER"></label>
+                        <layout row="1" column="7" width="3" height="1" align="LEFT"></layout>
+                    </layout_field>
+                    <layout_field field_name="datapath">
+                        <label label_content="Data Path" label_loc="TOP" label_align="CENTER"></label>
+                        <layout row="1" column="10" width="3" height="1" align="LEFT"></layout>
+                    </layout_field>
+                    <layout_field field_name="flight_cmd">
+                        <label label_content="Flight Command" label_loc="LEFT" label_align="CENTER"></label>
+                        <layout row="2" column="1" width="12" height="1" align="LEFT"></layout>
+                    </layout_field>
+                    <layout_field field_name="sim_cmd">
+                        <label label_content="Simulation Command" label_loc="LEFT" label_align="CENTER"></label>
+                        <layout row="3" column="1" width="12" height="1" align="LEFT"></layout>
+                    </layout_field>
+                    <layout_field field_name="file_loc">
+                        <label label_content="Flight Path" label_loc="LEFT" label_align="CENTER"></label>
+                        <layout row="4" column="1" width="12" height="1" align="LEFT"></layout>
+                    </layout_field>        
+                </section_content>
+            </section>
+            <entry_section>
+                <section_header>
+                    <layout_display>
+                        <template template="User choice {enumerated_input} for channel: {flight_channel[1]}."></template>
+                        <layout row="1" column="1" width="6" height="1" align="LEFT"></layout>
+                    </layout_display>
+                    <layout_field field_name="bool">
+                        <label label_content="Include in Series" label_loc="LEFT" label_align="CENTER"></label>
+                        <layout row="1" column="7" width="3" height="1" align="LEFT"></layout>
+                    </layout_field>
+                    <icon icon_type="STATUS">
+                        <mouseover_display>
+                            <mouseover_element field_name="entry_output_1" display_name="Entry Output 1"></mouseover_element>
+                            <mouseover_element field_name="entry_output_2" display_name="Entry Output 2"></mouseover_element>
+                            <mouseover_element field_name="entry_output_3" display_name="Entry Output 3"></mouseover_element>
+                            <mouseover_element field_name="entry_output_4" display_name="Entry Output 4"></mouseover_element>
+                            <mouseover_element field_name="entry_output_5" display_name="Entry Output 5"></mouseover_element>
+                            <mouseover_element field_name="entry_output_6" display_name="Entry Output 6"></mouseover_element>
+                        </mouseover_display>
+                        <layout row="1" column="12" width="1" height="1" align="RIGHT"></layout>
+                    </icon>
+                </section_header>               
+                <section_content>
+                    <layout_field field_name="enumerated_input">
+                        <label label_content="Enumerated Choice" label_loc="LEFT" label_align="CENTER"></label>
+                        <layout row="1" column="1" width="4" height="1" align="CENTER"></layout>
+                    </layout_field>
+                    <layout_field field_name="flight_channel">
+                        <label label_content="Flight Channel" label_loc="LEFT" label_align="CENTER"></label>
+                        <layout row="2" column="1" width="6" height="1" align="LEFT"></layout>
+                    </layout_field>
+                    <layout_field field_name="sim_channel">
+                        <label label_content="Sim Channel" label_loc="RIGHT" label_align="CENTER"></label>
+                        <layout row="2" column="7" width="6" height="1" align="RIGHT"></layout>
+                    </layout_field>                    
+                    <layout_field field_name="flight_evr">
+                        <label label_content="Flight EVR" label_loc="LEFT" label_align="CENTER"></label>
+                        <layout row="3" column="1" width="6" height="1" align="LEFT"></layout>
+                    </layout_field>
+                    <layout_field field_name="sim_evr">
+                        <label label_content="Sim EVR" label_loc="RIGHT" label_align="CENTER"></label>
+                        <layout row="3" column="7" width="6" height="1" align="RIGHT"></layout>
+                    </layout_field>
+                    <layout_field field_name="verification_cond">
+                        <label label_content="Verification Condition" label_loc="LEFT" label_align="CENTER"></label>
+                        <layout row="4" column="1" width="12" height="1" align="LEFT"></layout>
+                    </layout_field>
+                </section_content>
+                <section_results>
+                    <table table_name="my_entry_output_array">
+                        <label label_content="Entry Output Array" label_loc="BOTTOM" label_align="CENTER"></label>
+                        <table_field width="4" column_label="Entry Array 1">
+                            <template template="{entry_output_array_field_1}"></template>
+                        </table_field>
+                        <table_field width="4" column_label="Entry Array 2">
+                            <template template="{entry_output_array_field_2}"></template>
+                        </table_field>
+                    </table>
+                </section_results>                                                 
+            </entry_section>
+            <section>
+                <section_results>
+                    <layout_display>
+                        <template template="Output file: {file_output}"></template>
+                        <layout row="1" column="1" width="6" height="1" align="LEFT"></layout>
+                    </layout_display>
+                    <image_display field_name="image_output">
+                        <label label_content="Image Output" label_loc="TOP" label_align="CENTER"></label>
+                        <layout row="2" column="1" width="6" height="6" align="CENTER"></layout>
+                    </image_display>
+                    <series field_name="series_output">
+                        <label label_content="Chart Output" label_loc="TOP" label_align="CENTER"></label>
+                        <layout row="2" column="7" width="6" height="6" align="CENTER"></layout>
+                    </series>
+                    <table table_name="my_output_array">
+                        <label label_content="Awesome Table" label_loc="BOTTOM" label_align="CENTER"></label>
+                        <mouseover_display>
+                            <mouseover_element field_name="output_array_field_4" display_name="Output Array 4"></mouseover_element>
+                            <mouseover_element field_name="output_array_field_5" display_name="Output Array 5"></mouseover_element>
+                            <mouseover_element field_name="output_array_field_6" display_name="Output Array 6"></mouseover_element>
+                            <mouseover_element field_name="output_array_field_7" display_name="Output Array 7"></mouseover_element>
+                        </mouseover_display>
+                        <table_field width="4" column_label=" Output Array 1">
+                            <template template="{output_array_field_1}"></template>
+                        </table_field>
+                        <table_field width="4" column_label=" Output Array 2">
+                            <template template="{output_array_field_2}"></template>
+                        </table_field>
+                        <table_field width="4" column_label=" Output Array 3">
+                            <template template="{output_array_field_3}"></template>
+                        </table_field>
+                    </table>
+                </section_results>
+            </section>
+        </advanced_layout>
     </custom_script>
 </custom-scripts>
