@@ -16,6 +16,7 @@ from datetime import datetime, timedelta
 import copy
 import os
 import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
 import random
 from ing_lib.logs import init_console_logger, get_logger
 init_console_logger()
@@ -25,83 +26,169 @@ from ing_lib.steps import *
 
 GRAPH_FILE_NAME = 'sample_graph.png'
 
-def plot_series(series: list, output_dir: str,
-                     png_name: str = GRAPH_FILE_NAME):
-    """
-    Plot **all** channel time‑series on a single figure and save as PNG.
 
-    Parameters
-    ----------
-    series : list[dict]
-        List of channel dictionaries built earlier (each contains
-        ``name``, ``color`` and ``data`` = [(dn, ert), …]).
-    output_dir : str
-        Directory where the PNG will be written.
-    png_name : str, optional
-        Filename (without path) for the combined plot.
-    """
+# Helper to parse ERT strings (unchanged)
+def _parse_ert(ert_str: str) -> datetime:
+    ert_str = ert_str.strip().rstrip('Z')
+    return datetime.strptime(ert_str, "%Y-%jT%H:%M:%S.%f")
+
+def plot_series(series: dict, output_dir: str,
+                     png_name: str = GRAPH_FILE_NAME):
+    """ """
+
     if not os.path.isdir(output_dir):
         os.makedirs(output_dir, exist_ok=True)
 
-    plt.figure(figsize=(12, 6))
+    # Create figure / axis
+    fig, ax = plt.subplots(figsize=(12, 6))
+
+    # X‑axis label
+    timetype = series.get("timetype", "Time")
+    ax.set_xlabel(timetype)
 
     plotted_any = False   # <-- will stay False if no channel has valid points
 
-    # Iterate over every channel, plotting its points
-    for ch in series:
-        chan_id = ch.get("name", "unknown")
-        colour  = ch.get("color", "#000000")
-        raw_data = ch.get("data", [])
-
-        dn_vals = []
-        ert_vals = []
-
-        for point in raw_data:
-            if not isinstance(point, (list, tuple)) or len(point) != 2:
-                continue
-            dn, ert = point
-            try:
-                ert_dt= datetime.strptime(ert, "%Y-%jT%H:%M:%S.%f")
-            except Exception as exc:
-                logger.debug(f"Could not parse ERT '{ert}' for channel {chan_id}: {exc}")
-                continue
-
-            dn_vals.append(float(dn))
-            ert_vals.append(ert_dt)
-
-        if not dn_vals:
-            logger.warning(f"No valid telemetry points for channel {chan_id}; skipping plot.")
-            continue
-
-        # Plot this channel’s line (with markers for visibility)
-        plt.plot(ert_vals, dn_vals,
-                 color=colour,
-                 linewidth=2,
-                 marker='o',
-                 markersize=4,
-                 label=f"Channel {chan_id}")
-        plotted_any = True  # at least one line was drawn
-
-    # ------------------------------------------------------------------
-    # Only add a legend if something was actually plotted.
-    # ------------------------------------------------------------------
-    if plotted_any:
-        plt.title("Telemetry – DN vs. Earth Return Time (All Channels)")
-        plt.xlabel("Earth Return Time (ERT)")
-        plt.ylabel("DN Value")
-        plt.grid(True, which="both", ls="--", lw=0.5, alpha=0.7)
-        plt.legend(title="Channels", loc="best", fontsize="small")
-        plt.gcf().autofmt_xdate()
-        plt.tight_layout()
-    else:
-        # Still produce a minimal figure so the PNG exists, but warn the user.
-        plt.title("No valid telemetry data to display")
-        plt.axis('off')  # hide axes
 
     # Save the combined image
     png_path = os.path.join(output_dir, png_name)
     plt.savefig(png_path, dpi=300)
     plt.close()
+
+    logger.info(f"Saved combined telemetry plot → {png_path}")
+
+
+def plot_series(series: dict, output_dir: str,
+                     png_name: str = GRAPH_FILE_NAME):
+    """
+    Plot **all** channel time‑series on a single figure and save as PNG.
+
+        {
+            "series_output": {
+                "timetype": "Earth Return Time",
+                "series": [
+                    {"name": "...",
+                     "color": "#RRGGBB",
+                     "series_type": "HORIZONTAL" | "VERTICAL",
+                     "data": [(timestamp:str, value), ...]},
+                    …
+                ],
+            }
+        }
+
+    """
+
+    # ------------------------------------------------------------------
+    #   Helper – parse timestamps (same helper used elsewhere in this file)
+    # ------------------------------------------------------------------
+    def _parse_timestamp(ts):
+        """Return a ``datetime`` or ``None``."""
+        if isinstance(ts, datetime):
+            return ts
+        try:
+            ts_str = str(ts).strip().rstrip('Z')
+            return datetime.strptime(ts_str, "%Y-%jT%H:%M:%S.%f")
+        except Exception as exc:
+            logger.debug(f"Could not parse timestamp '{ts}': {exc}")
+            return None
+
+
+    if not os.path.isdir(output_dir):
+        os.makedirs(output_dir, exist_ok=True)
+
+    # ------------------------------------------------------------------
+    #   Create figure & axis – **use plt.subplots**, not plt.subplot
+    # ------------------------------------------------------------------
+    fig, ax = plt.subplots(figsize=(12, 6))
+
+    # X‑axis label
+    timetype = series.get("timetype", "Time")
+    ax.set_xlabel(timetype)
+    ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%jT%H:%M:%S.%f"))
+
+    plotted_any = False   # <-- will stay False if no channel has valid points
+
+  # ------------------------------------------------------------------
+    #   Iterate over every series entry
+    # ------------------------------------------------------------------
+    for s in series.get("series", []):
+        name = s.get("name", "")
+        series_type = s.get("series_type", "HORIZONTAL").upper()
+        colour = s.get("color", "#000000")
+        data = s.get("data", [])
+
+        # --------------------------------------------------------------
+        #   VERTICAL series – draw a single dashed line per point
+        # --------------------------------------------------------------
+        if series_type == "VERTICAL":
+            for ts_raw, label in data:
+                x = _parse_timestamp(ts_raw)
+                if x is None:
+                    continue
+
+                # Draw the vertical dashed line
+                ax.axvline(x=x, color=colour, linestyle="--", linewidth=1.0)
+
+                # Position the label near the top of the plot (95 % of ymax)
+                ylim = ax.get_ylim()
+                y_label = ylim[1] * 0.95
+                ax.text(x, y_label, str(label),
+                        rotation=90,
+                        ha="right",
+                        va="top",
+                        fontsize=8,
+                        color=colour)
+
+            continue   # Skip generic line handling for this series
+
+        # --------------------------------------------------------------
+        #   HORIZONTAL series – plot (time, value) line
+        # --------------------------------------------------------------
+        timestamps = []
+        values = []
+        for ts_raw, val in data:
+            x = _parse_timestamp(ts_raw)
+            if x is None:
+                continue
+            timestamps.append(x)
+            try:
+                values.append(float(val))
+            except Exception:
+                logger.debug(f"Could not convert value '{val}' for series '{name}'. Skipping.")
+                # If conversion fails, the point is omitted
+
+        if not timestamps:
+            logger.warning(f"No valid points for series '{name}'. Skipping plot.")
+            continue
+
+        ax.plot(timestamps, values,
+                color=colour,
+                linewidth=2,
+                marker='o',
+                markersize=4,
+                label=name)
+        plotted_any = True   # At least one horizontal line was drawn
+
+    # ------------------------------------------------------------------
+    #   Finalise the figure
+    # ------------------------------------------------------------------
+    if plotted_any:
+        ax.set_title(f"Telemetry – DN vs. {timetype}")
+        ax.grid(True, which="both", ls="--", lw=0.5, alpha=0.7)
+        ax.legend(loc="best", fontsize="small")
+        fig.autofmt_xdate()
+        plt.tight_layout()
+    else:
+        # No data – create a placeholder figure
+        ax.set_title("No valid telemetry data to display")
+        ax.axis("off")
+        plt.axis('off')  # hide axes
+
+    # ------------------------------------------------------------------
+    #   Save the PNG
+    # ------------------------------------------------------------------
+    png_path = os.path.join(output_dir, png_name)
+    fig.savefig(png_path, dpi=300)
+    plt.close(fig)
 
     logger.info(f"Saved combined telemetry plot → {png_path}")
 
@@ -228,34 +315,46 @@ if __name__ == '__main__':
 
     # Build a series
 
-    series= {'series' :[
-                {
-                'name': 'BATMAN',
-                'series_type': 'HORIZONTAL',
-                'timetype': 'Earth Return Time',
-                'color': '#499894',
-                'data': []
-                },
-                {
-                'name': 'ROBIN',
-                'series_type': 'HORIZONTAL',
-                'timetype': 'Earth Return Time',
-                'color': '#FF0000',
-                'data': []
-                }
-            ]
-    }
-    for s in series['series']:
+    series= {'series_output' : {'timetype': 'Earth Return Time',
+                                'series': [
+                                            {
+                                            'name': 'Voltage (V)',
+                                            'series_type': 'HORIZONTAL',
+                                            'color': '#499894',
+                                            'data': []
+                                            },
+                                            {
+                                            'name': 'Temperature (C)',
+                                            'series_type': 'HORIZONTAL',
+                                            'color': '#FF0000',
+                                            'data': []
+                                            }
+
+                                        ]
+                                }
+             }
+    for s in series['series_output']['series']:
         for i in range(random.randint(8,20)):
             time = start_time + timedelta(seconds=i*random.randint(1,10))
             value = random.randrange(3,14)
-            s['data'].append((value,time.strftime('%Y-%jT%H:%M:%S.%f')))
+            s['data'].append((time.strftime('%Y-%jT%H:%M:%S.%f'),value))
 
       
-        s['data'].sort(key=lambda pt: datetime.strptime(pt[1], '%Y-%jT%H:%M:%S.%f'))
+        s['data'].sort(key=lambda pt: datetime.strptime(pt[0], '%Y-%jT%H:%M:%S.%f'))
 
+    event_time_1 = start_time + timedelta(seconds=i*random.randint(1,10))
+    event_time_2 = event_time_1 + timedelta(seconds=i * random.randint(1, 10))
 
+    event = {
+            'name': 'Event',
+            'series_type': 'VERTICAL',
+            'color': '#FF0000',
+            'data': []
+            }
+    event['data'].append((event_time_1.strftime('%Y-%jT%H:%M:%S.%f'),"TURN_ON"))
+    event['data'].append((event_time_2.strftime('%Y-%jT%H:%M:%S.%f'), "TURN_OFF"))
 
+    series['series_output']['series'].append(event)
 
     '''
     If your script has entries - evaluate them to determine overall status.
@@ -286,7 +385,7 @@ if __name__ == '__main__':
     write_series_file(series,output_dir)
 
    # Write image of channels graphed
-    plot_series(series['series'], output_dir)
+    plot_series(series['series_output'], output_dir)
 
     # Report Final custom_script_status
     write_output_file(output_dict, output_file_abs_path)
