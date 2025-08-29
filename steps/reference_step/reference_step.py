@@ -19,46 +19,25 @@ import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import random
 from ing_lib.logs import init_console_logger, get_logger
+from pathlib import Path
+import string
 init_console_logger()
 logger = get_logger(__name__)
 
 from ing_lib.steps import *
 
 GRAPH_FILE_NAME = 'sample_graph.png'
+GRAPH_FILE_NAME_2 = 'sample_graph2.png'
+FILE_NAME_1 = 'sample_file.txt'
+FILE_NAME_2 = 'sample_file_2.txt'
 
 
-# Helper to parse ERT strings (unchanged)
-def _parse_ert(ert_str: str) -> datetime:
-    ert_str = ert_str.strip().rstrip('Z')
-    return datetime.strptime(ert_str, "%Y-%jT%H:%M:%S.%f")
+def random_text(num_chars: int) -> str:
+    # You can tailor the charset; here we include letters, digits, punctuation, space
+    charset = string.ascii_letters + string.digits + string.punctuation + " "
+    return ''.join(random.choice(charset) for _ in range(num_chars))
 
-def plot_series(series: dict, output_dir: str,
-                     png_name: str = GRAPH_FILE_NAME):
-    """ """
-
-    if not os.path.isdir(output_dir):
-        os.makedirs(output_dir, exist_ok=True)
-
-    # Create figure / axis
-    fig, ax = plt.subplots(figsize=(12, 6))
-
-    # X‑axis label
-    timetype = series.get("timetype", "Time")
-    ax.set_xlabel(timetype)
-
-    plotted_any = False   # <-- will stay False if no channel has valid points
-
-
-    # Save the combined image
-    png_path = os.path.join(output_dir, png_name)
-    plt.savefig(png_path, dpi=300)
-    plt.close()
-
-    logger.info(f"Saved combined telemetry plot → {png_path}")
-
-
-def plot_series(series: dict, output_dir: str,
-                     png_name: str = GRAPH_FILE_NAME):
+def plot_series(series: dict, output_dir: str, png_name: str):
     """
     Plot **all** channel time‑series on a single figure and save as PNG.
 
@@ -88,7 +67,7 @@ def plot_series(series: dict, output_dir: str,
             ts_str = str(ts).strip().rstrip('Z')
             return datetime.strptime(ts_str, "%Y-%jT%H:%M:%S.%f")
         except Exception as exc:
-            logger.debug(f"Could not parse timestamp '{ts}': {exc}")
+            logger.error(f"Could not parse timestamp '{ts}': {exc}")
             return None
 
 
@@ -128,7 +107,7 @@ def plot_series(series: dict, output_dir: str,
                 # Draw the vertical dashed line
                 ax.axvline(x=x, color=colour, linestyle="--", linewidth=1.0)
 
-                # Position the label near the top of the plot (95 % of ymax)
+                # Position the label near the top of the plot (95% of ymax)
                 ylim = ax.get_ylim()
                 y_label = ylim[1] * 0.95
                 ax.text(x, y_label, str(label),
@@ -221,12 +200,13 @@ if __name__ == '__main__':
     parameters=copy.deepcopy(variables.get('parameters', {}))    
     entries = copy.deepcopy(input_dict.get('entries', {}))
     outputs = {
-        'start_time': '',
+        'start_time_date_time': '',
         'query_start': '',
         'query_end': '',
-        'file_output': '',
-        'image_output': '',
-        'series_output': '',
+        'file_output_1': FILE_NAME_1,
+        'file_output_2': FILE_NAME_2,
+        'image_output_1': GRAPH_FILE_NAME,
+        'image_output_2': GRAPH_FILE_NAME_2
     }
 
     my_output_array = []
@@ -314,8 +294,8 @@ if __name__ == '__main__':
         my_output_array.append(item)
 
     # Build a series
-
-    series= {'series_output' : {'timetype': 'Earth Return Time',
+    series = {}
+    series['series_output_1'] = {'timetype': 'Earth Return Time',
                                 'series': [
                                             {
                                             'name': 'Voltage (V)',
@@ -332,8 +312,7 @@ if __name__ == '__main__':
 
                                         ]
                                 }
-             }
-    for s in series['series_output']['series']:
+    for s in series['series_output_1']['series']:
         for i in range(random.randint(8,20)):
             time = start_time + timedelta(seconds=i*random.randint(1,10))
             value = random.randrange(3,14)
@@ -354,7 +333,51 @@ if __name__ == '__main__':
     event['data'].append((event_time_1.strftime('%Y-%jT%H:%M:%S.%f'),"TURN_ON"))
     event['data'].append((event_time_2.strftime('%Y-%jT%H:%M:%S.%f'), "TURN_OFF"))
 
-    series['series_output']['series'].append(event)
+    series['series_output_1']['series'].append(event)
+
+    series['series_output_2'] ={'timetype': 'SCET',
+                                  'series': [
+                                      {
+                                          'name': 'CMD_CNT',
+                                          'series_type': 'HORIZONTAL',
+                                          'color': "#101111",
+                                          'data': []
+                                      },
+                                      {
+                                          'name': 'CMD_REJECTED',
+                                          'series_type': 'HORIZONTAL',
+                                          'color': "#00FFAA",
+                                          'data': []
+                                      },
+                                      {
+                                          'name': 'CMD_COMPLETED',
+                                          'series_type': 'HORIZONTAL',
+                                          'color': "#FFA034",
+                                          'data': []
+                                      }
+
+                                  ]
+                              }
+
+    for s in series['series_output_2']['series']:
+        for i in range(random.randint(8,20)):
+            time = start_time + timedelta(seconds=i*random.randint(1,10))
+            value = random.randrange(3,14)
+            s['data'].append((time.strftime('%Y-%jT%H:%M:%S.%f'),value))
+
+        s['data'].sort(key=lambda pt: datetime.strptime(pt[0], '%Y-%jT%H:%M:%S.%f'))
+
+    event_time_1 = start_time + timedelta(seconds=i*random.randint(1,10))
+
+    event = {
+        'name': 'Event',
+        'series_type': 'VERTICAL',
+        'color': "#3700FF",
+        'data': []
+    }
+    event['data'].append((event_time_1.strftime('%Y-%jT%H:%M:%S.%f'),"BAD_COMMAND"))
+
+    series['series_output_2']['series'].append(event)
 
     '''
     If your script has entries - evaluate them to determine overall status.
@@ -384,9 +407,15 @@ if __name__ == '__main__':
     output_dir = os.path.dirname(output_file_abs_path)
     write_series_file(series,output_dir)
 
-   # Write image of channels graphed
-    plot_series(series['series_output'], output_dir)
+    # Write image of channels graphed
+    plot_series(series['series_output_1'], output_dir, GRAPH_FILE_NAME)
+    plot_series(series['series_output_2'], output_dir, GRAPH_FILE_NAME_2)
 
+    # Write Files
+    output_path = Path(FILE_NAME_1)
+    output_path.write_text(random_text(10000), encoding="utf-8")
+    output_path = Path(FILE_NAME_2)
+    output_path.write_text(random_text(10000), encoding="utf-8")
     # Report Final custom_script_status
     write_output_file(output_dict, output_file_abs_path)
 
