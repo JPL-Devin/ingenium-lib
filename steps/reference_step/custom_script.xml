@@ -100,16 +100,19 @@
         <output_field description="Start time (in DOY format) of the query" name="query_start" type="STRING"/>
         <output_field description="End time (in DOY format) of the query" name="query_end" type="STRING"/>
         
-        <!--' Files created in the working directory of script/step can be relayed back to to the Ingenium server and made available for downlink.'-->
+        <!--' Files created in the working directory of script/step can be relayed back to the Ingenium server and made available for downlink.'-->
         <!--' This could be used for specific outputs from the test vehicle e.g. XLSX/CSV or binary files.'-->
-        <output_field name="file_output" description="Sample File" type="FILE"/>
+        <output_field name="file_output_1" description="Sample File" type="FILE"/>
+        <output_field name="file_output_2" description="Sample File" type="FILE"/>
                 
-        <!--' Image files created in the working directory of script/step can be relayed back to to the Ingenium server and displayed in the UI'-->
-        <output_field name="image_output" description="Sample Image Output" type="IMAGE"/>
+        <!--' Image files created in the working directory of script/step can be relayed back to the Ingenium server and displayed in the UI'-->
+        <output_field name="image_output_1" description="Sample Image Output" type="IMAGE"/>
+        <output_field name="image_output_2" description="Sample Image Output" type="IMAGE"/>
         
         <!--' A series output is a time series data set of one or more variables and information how to display name. '-->
         <!--' Data is saved in the series.json file in the working directory of the script/step and is displayed in an interactive graph in the UI'-->
-        <output_field name="series_output" description="Sample Image Output" type="SERIES"/>
+        <output_field name="series_output_1" description="Sample Image Output" type="SERIES"/>
+        <output_field name="series_output_2" description="Sample Image Output" type="SERIES"/>
         
         <output_array name="my_output_array" description="Output array variable. Only one output array is supported." max_entries="10">
             <output_array_field name="output_array_field_1" description="Field 1 of output array" type="INT" ></output_array_field>
@@ -241,17 +244,30 @@
             <section>
                 <section_results>
                     <layout_display>
-                        <template template="Output file: {file_output}"></template>
+                        <template template="Output file 1: {file_output_1}"></template>
                         <layout row="1" column="1" width="6" height="1" align="LEFT"></layout>
                     </layout_display>
-                    <image_display field_name="image_output">
+                    <layout_display>
+                        <template template="Output file 2: {file_output_2}"></template>
+                        <layout row="1" column="7" width="6" height="1" align="LEFT"></layout>
+                    </layout_display>
+                    <image_display field_name="image_output_1">
                         <label label_content="Image Output" label_loc="TOP" label_align="CENTER"></label>
                         <layout row="2" column="1" width="6" height="6" align="CENTER"></layout>
                     </image_display>
-                    <series field_name="series_output">
+                    <series field_name="series_output_1">
                         <label label_content="Chart Output" label_loc="TOP" label_align="CENTER"></label>
                         <layout row="2" column="7" width="6" height="6" align="CENTER"></layout>
                     </series>
+                    <series field_name="series_output_2">
+                        <label label_content="Chart Output" label_loc="TOP" label_align="CENTER"></label>
+                        <layout row="8" column="1" width="6" height="6" align="CENTER"></layout>
+                    </series>
+                    <image_display field_name="image_output_2">
+                        <label label_content="Image Output" label_loc="TOP" label_align="CENTER"></label>
+                        <layout row="8" column="7" width="6" height="6" align="CENTER"></layout>
+                    </image_display>
+
                     <table table_name="my_output_array">
                         <label label_content="Awesome Table" label_loc="BOTTOM" label_align="CENTER"></label>
                         <mouseover_display>
