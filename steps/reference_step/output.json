@@ -38,18 +38,6 @@
                 {
                     "entry_output_array_field_1": "1",
                     "entry_output_array_field_2": "10"
-                },
-                {
-                    "entry_output_array_field_1": "2",
-                    "entry_output_array_field_2": "20"
-                },
-                {
-                    "entry_output_array_field_1": "3",
-                    "entry_output_array_field_2": "30"
-                },
-                {
-                    "entry_output_array_field_1": "4",
-                    "entry_output_array_field_2": "40"
                 }
             ]
         },
@@ -80,18 +68,30 @@
                 {
                     "entry_output_array_field_1": "1",
                     "entry_output_array_field_2": "10"
+                },
+                {
+                    "entry_output_array_field_1": "2",
+                    "entry_output_array_field_2": "20"
+                },
+                {
+                    "entry_output_array_field_1": "3",
+                    "entry_output_array_field_2": "30"
+                },
+                {
+                    "entry_output_array_field_1": "4",
+                    "entry_output_array_field_2": "40"
                 }
             ]
         }
     ],
     "outputs": {
-        "start_time": "",
+        "start_time_date_time": "2025-302T13:17:34.053000",
         "query_start": "2025-302T13:16:34.053000",
         "query_end": "2025-302T13:18:34.053000",
-        "file_output": "",
-        "image_output": "",
-        "series_output": "",
-        "start_time_date_time": "2025-302T13:17:34.053000"
+        "file_output_1": "sample_file.txt",
+        "file_output_2": "sample_file_2.txt",
+        "image_output_1": "sample_graph.png",
+        "image_output_2": "sample_graph2.png"
     },
     "output_array": [
         {
@@ -165,6 +165,33 @@
             "output_array_field_5": 21,
             "output_array_field_6": 210.0,
             "output_array_field_7": 28
+        },
+        {
+            "output_array_field_1": 8,
+            "output_array_field_2": 80.0,
+            "output_array_field_3": 160.0,
+            "output_array_field_4": 16,
+            "output_array_field_5": 24,
+            "output_array_field_6": 240.0,
+            "output_array_field_7": 32
+        },
+        {
+            "output_array_field_1": 9,
+            "output_array_field_2": 90.0,
+            "output_array_field_3": 180.0,
+            "output_array_field_4": 18,
+            "output_array_field_5": 27,
+            "output_array_field_6": 270.0,
+            "output_array_field_7": 36
+        },
+        {
+            "output_array_field_1": 10,
+            "output_array_field_2": 100.0,
+            "output_array_field_3": 200.0,
+            "output_array_field_4": 20,
+            "output_array_field_5": 30,
+            "output_array_field_6": 300.0,
+            "output_array_field_7": 40
         }
     ]
 }
