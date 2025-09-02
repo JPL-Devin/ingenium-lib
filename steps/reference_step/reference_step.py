@@ -208,7 +208,6 @@ if __name__ == '__main__':
         'image_output_1': GRAPH_FILE_NAME,
         'image_output_2': GRAPH_FILE_NAME_2
     }
-
     my_output_array = []
 
     output_dict = {
@@ -216,7 +215,7 @@ if __name__ == '__main__':
         'inputs': inputs,
         'entries': entries,
         'outputs': outputs,
-        'output_array': my_output_array
+        'output_summary': ''
     }
 
     # Step through each entry and initialize the outputs
@@ -395,13 +394,25 @@ if __name__ == '__main__':
     
     Note that you will likely have some logic to determine pass/fail (or will base it off entry verification_status)
     '''
-
-
-    output_dict['custom_script_status'] = 'PASS'
-
-    msg = f'reference_step.py has run to completion with overall status: {custom_script_status}' 
+    msg = f'reference_step.py has run to completion with overall status: {custom_script_status}'
     logger.info(msg)
     output_dict['custom_script_status'] = custom_script_status
+
+    '''
+    Build a text compatible representation of the step output.
+    Ingenium steps are complicated JSON objects which don't translate well into reporting tools like Excel.
+    
+    Custom Scripts should produce a text compatible translation of the step contents for use in these situations.
+    (obviously this can not include things like images/series/etc.)
+    '''
+
+    text_representation = f'Sending Flight CMD: {output_dict["inputs"]["flight_cmd"].split(",")[0]} and Sim CMD: {output_dict["inputs"]["sim_cmd"].split(",")[0]} at {output_dict["inputs"]["start_time"]}\n'
+    for entry in entries:
+        text_representation = text_representation + f'Querying Flight Channel:{entry["entry_inputs"]["flight_channel"].split(",")[0]} Sim Channel:{entry["entry_inputs"]["sim_channel"].split(",")[0]} (EVRs:{entry["entry_inputs"]["flight_evr"]}, {entry["entry_inputs"]["sim_evr"]}) - Value:{entry["entry_outputs"]["entry_output_1"]}\n'
+
+    text_representation = text_representation + f'Generated: {output_dict["outputs"]["file_output_1"]},{output_dict["outputs"]["file_output_1"]}'
+
+    output_dict['output_summary'] = text_representation
 
     # Write any series or image data
     output_dir = os.path.dirname(output_file_abs_path)
