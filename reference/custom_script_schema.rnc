@@ -54,6 +54,10 @@ header-def = element header {
 custom-script-def = element custom_script {
   # The script name. Must be unique and posix compliant
   attribute script_name {text},
+  # Whether the custom script is considered a "command"
+  # Used to control automatic execution
+  # Recommended to be flagged true if script is commanding the vehicle or simualtion under test
+  attribute is_command {"true" | "false"},  
   # Description of the script. What does it do?
   attribute description {text},
   # SHA256 hash of the script
