@@ -57,6 +57,7 @@ import xml.etree.ElementTree as ET
 import hashlib
 import base64
 import os
+import re
 from deepdiff import DeepDiff
 
 ##################################################### Functions ######################################################
@@ -537,6 +538,7 @@ def parse_custom_script_xml(xml_file, base_path):
         
         script_elem = script_elements[0]
         script_name = script_elem.get("script_name")
+        is_command = script_elem.get('is_command')
         script_path = script_elem.get("script_path")
         description = script_elem.get("description")
         hash_value = script_elem.get("hash")  # Get hash from XML if provided
@@ -551,10 +553,10 @@ def parse_custom_script_xml(xml_file, base_path):
             logger.error(msg)
             raise common.IngeniumLibError(msg)
             
-            # Handle missing script_path by building it from script_name
-            if not script_path:
-                script_path = script_name
-                logger.info(f"Script path not provided for '{script_name}', using script name as filename: {script_path}")
+        # Handle missing script_path by building it from script_name
+        if not script_path:
+            script_path = script_name
+            logger.info(f"Script path not provided for '{script_name}', using script name as filename: {script_path}")
             
         # Resolve full path to script file
         script_file_path = resolve_script_file_path(script_path, xml_dir, base_path)
@@ -578,6 +580,7 @@ def parse_custom_script_xml(xml_file, base_path):
         script_data = {
             "script_name": script_name,
             "script_path": server_script_path,  # Use server path for posting
+            "is_command" : is_command,
             "description": description,
             "script_id": final_script_id,
             "hash": final_hash,
