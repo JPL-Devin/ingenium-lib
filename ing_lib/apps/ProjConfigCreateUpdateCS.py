@@ -44,8 +44,8 @@ Authors:
 
 ##################################################### Imports ######################################################
 import logging
-from logs import init_console_logger
-init_console_logger(logging.INFO)
+from logs import init_console_logger, get_logger
+init_console_logger()
 
 import common
 from project_config import get_custom_scripts, create_custom_script, update_custom_script
@@ -57,12 +57,11 @@ import xml.etree.ElementTree as ET
 import hashlib
 import base64
 import os
-import re
 from deepdiff import DeepDiff
 
 ##################################################### Functions ######################################################
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 def get_input(args=[]):
     """
@@ -773,19 +772,15 @@ def validate_script_data(script_data):
     bool
         True if valid, False otherwise
     """
+    import re
+
     required_fields = ['script_name', 'script_path', 'description', 'script_id']
-    
+
     for field in required_fields:
         if not script_data.get(field):
             logger.error(f"Script data missing required field: {field}")
             return False
-    
-    # Validate script name format (should match the regex pattern in schema)
-    script_name = script_data.get('script_name')
-    if not script_name.replace('_', '').replace('-', '').replace(' ', '').isalnum():
-        logger.error(f"Script name contains invalid characters: {script_name}")
-        return False
-    
+
     return True
 
 
