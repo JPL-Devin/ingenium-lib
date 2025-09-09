@@ -7,10 +7,9 @@ Authors:
 
 ##################################################### Imports ######################################################
 import logging
-from logs import init_console_logger
-init_console_logger(logging.INFO)
+from logs import init_console_logger,get_logger
+init_console_logger()
 
-#from common import *
 import common
 from project_config import get_dictionary_versions,get_dictionary,get_custom_scripts,get_vnv_vis,get_dictionary_element
 import argparse
@@ -21,7 +20,11 @@ import json
 
 ##################################################### Functions ######################################################
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
+
+def csv_list(value: str):
+    """Convert a comma‑separated string to a list of stripped items."""
+    return [item.strip() for item in value.split(',') if item.strip()]
 
 def get_input(args=[]):
     """
@@ -56,8 +59,17 @@ def get_input(args=[]):
                         help='Path to the SSL CA bundle. If provided, this will override ignore_ssl_error.')
     parser.add_argument('--rsa', action='store_true',
                         help='Uses RSA Two Factor Authentication (username/passcode) to authenticate.')
-    parser.add_argument('--filter_retired', action='store_true', default=True,
+    parser.add_argument('--filter_retired', action='store_true',
                         help='Filters dictionaries based on status and ignores RETIRED dictionaries.')
+    parser.add_argument('--flight_sse', type=str, choices=['flight', 'sse'],
+                        help='Limits the backup to either flight or sse dictionaries')
+    parser.add_argument('--specific_versions', type=csv_list,
+                        help='Limits the backup to specific versions (csv list).')
+    parser.add_argument('--include_vis', action='store_true',
+                        help='Whether to include V&V information in the backup')
+    parser.add_argument('--include_cs', action='store_true',
+                        help='Whether to include Custom Scripts information in the backup')
+
 
     if len(args) > 0:
         inputs = parser.parse_args(args)
@@ -66,13 +78,14 @@ def get_input(args=[]):
 
     # Setup debug logging (if desired)
     if inputs.debug:
-        for handler in logger.root.handlers:
+        get_logger().setLevel(logging.DEBUG)
+        for handler in get_logger().handlers:
             handler.setLevel(logging.DEBUG)
             logger.debug("Logging set to Debug.")
     return inputs
 
 
-def get_source_dictionaries(server, api_version, filter_retired):
+def get_source_dictionaries(server, api_version, inputs):
     """
     Queries all dictionaries from a source server
 
@@ -86,8 +99,8 @@ def get_source_dictionaries(server, api_version, filter_retired):
     api_version: str
         Either v3 or v4 (slight differences between the project configuration api)
 
-    filter_retired: bool
-        Whether to only backup the released/published dictionaries and ignore the retired dictionaries
+    inputs: object
+        Input object
 
     Returns
     -------
@@ -103,14 +116,24 @@ def get_source_dictionaries(server, api_version, filter_retired):
                           'vis': [],
                           'custom_scripts': []}
 
-    for dict_type in ['flight', 'sse']:
+    for dict_type in ['sse', 'flight']:
+
+        # If a flight/sse limit filter was provided, apply it
+        if inputs.flight_sse:
+            if dict_type not in inputs.flight_sse:
+                continue
 
         versions = get_dictionary_versions(server, dict_type, api_version=api_version)
 
         for version in versions:
 
+            # If a version filter was provided, apply it
+            if inputs.specific_versions:
+                if version.get('dictionary_version') not in inputs.specific_versions:
+                    continue
+
             # If the list of dictionaries is long you may want to skip the Retired ones. (it takes a long time to dump all of them)
-            if filter_retired:
+            if inputs.filter_retired:
                 if version.get('state') == 'RETIRED':
                     continue
             dictionary_content['versions'][dict_type][version.get('dictionary_version')] = {
@@ -127,11 +150,8 @@ def get_source_dictionaries(server, api_version, filter_retired):
                 if api_version == 'v3':
                     # Query the dictionary content in the specific dictionary version (note that the try except is because if there are no elements a 400 error is thrown)
                     try:
-                        elements = get_dictionary(server,
-                                                                                                                         version.get(
-                                                                                                                             'dictionary_version'),
-                                                                                                                         dict_type,
-                                                                                                                         sub_dict, api_version=api_version)
+                        elements = get_dictionary(server, version.get('dictionary_version'), dict_type,
+                                                  sub_dict, api_version=api_version)
                     except:
                         logger.warning(f"Could not read {version.get('dictionary_version')} - type:{sub_dict}. Skipping", exc_info=True)
                         continue
@@ -153,24 +173,22 @@ def get_source_dictionaries(server, api_version, filter_retired):
                         dictionary_content[dict_type][version.get('dictionary_version')][sub_dict].append(element_details)
 
                 else:
-                    for sub_dict in ['cmds', 'evrs', 'channels', 'mil1553']:
+                    # Query the dictionary content in the specific dictionary version (note that the try except is because if there are no elements a 400 error is thrown)
+                    try:
+                        dictionary_content[dict_type][version.get('dictionary_version')][sub_dict] = get_dictionary(
+                            server,
+                            version.get('dictionary_version'),
+                            dict_type,
+                            sub_dict, api_version=api_version)
+                    except:
+                        logger.warning(
+                            f"Could not read {version.get('dictionary_version')} - type:{sub_dict}. Skipping",
+                            exc_info=True)
+    if inputs.include_vis:
+        dictionary_content['vis'] = get_vnv_vis(server,api_version=api_version)
 
-                        # Query the dictionary content in the specific dictionary version (note that the try except is because if there are no elements a 400 error is thrown)
-                        try:
-                            dictionary_content[dict_type][version.get('dictionary_version')][sub_dict] = get_dictionary(
-                                server,
-                                version.get(
-                                    'dictionary_version'),
-                                dict_type,
-                                sub_dict, api_version=api_version)
-                        except:
-                            logger.warning(
-                                f"Could not read {version.get('dictionary_version')} - type:{sub_dict}. Skipping",
-                                exc_info=True)
-
-    dictionary_content['vis'] = get_vnv_vis(server,api_version=api_version)
-
-    dictionary_content['custom_scripts'] = get_custom_scripts(server,api_version=api_version)
+    if inputs.include_cs:
+        dictionary_content['custom_scripts'] = get_custom_scripts(server,api_version=api_version)
 
     return dictionary_content
 
@@ -226,7 +244,7 @@ def main(args=[]):
         logger.error(msg)
         raise common.IngeniumLibError(msg)
 
-    source_dict = get_source_dictionaries(inputs.server, inputs.api_version, inputs.filter_retired)
+    source_dict = get_source_dictionaries(inputs.server, inputs.api_version, inputs)
 
     with open(inputs.file_output, "w") as file:
         json.dump(source_dict, file)
