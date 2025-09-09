@@ -7,12 +7,13 @@ Authors:
 """
 
 ##################################################################### Imports
-import logging
+from logs import get_logger
 import datetime
 import requests
 import json
 import getpass
 import jwt
+from urllib.parse import urlparse
 
 ##################################################################### Endpoints
 # This lists the locations of all the Ingenium REST Endpoints (R15)
@@ -25,15 +26,15 @@ as_run_endpoint = "/core_server/api/v5/executions"
 dictionary_endpoint = "/dict_server/api/"
 
 ############################################################# Global
-token = None
+_token = None
 ssl_verify = True
-refresh_time = None
+_refresh_time = None
 
 ############################################################# Constants
 _TOKEN_REFRESH_DURATION = 3000
 _TOKEN_DURATION = 3600
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class IngeniumLibError(Exception):
@@ -59,7 +60,7 @@ def response_handler(response):
         True (response OK) or False (response failed - for any reason)
     """
 
-    good_responses = [200, 201, 202, 204]
+    good_responses = list(range(200,300))
 
     # Check if the status code successful - else log it
     if response.status_code in good_responses:
@@ -93,9 +94,13 @@ def ingenium_rest_get(endpoint):
         Data (JSON)
     """
 
+    # If needed, refresh the token
+    if _stale_token():
+        refresh_endpoint(_extact_server(endpoint), False)
+
     data = None
 
-    data_req = requests.get(endpoint, headers={'Authorization': token}, verify=ssl_verify)
+    data_req = requests.get(endpoint, headers=_auth_header(), verify=ssl_verify)
 
     if response_handler(data_req):
         data = data_req.json()
@@ -124,6 +129,10 @@ def ingenium_rest_get_paginated(endpoint, query_params={}):
         Data (JSON)
     """
 
+    # If needed, refresh the token
+    if _stale_token():
+        refresh_endpoint(_extact_server(endpoint), False)
+
     _INITIAL_LIMIT = 1000
     _INITIAL_OFFSET = 0
 
@@ -139,7 +148,7 @@ def ingenium_rest_get_paginated(endpoint, query_params={}):
         query_params['limit'] = limit
         query_params['offset'] = offset
 
-        data_req = requests.get(endpoint, headers={'Authorization': token}, verify=ssl_verify, params=query_params)
+        data_req = requests.get(endpoint, headers=_auth_header(), verify=ssl_verify, params=query_params)
 
         if response_handler(data_req):
             data = data_req.json()
@@ -186,16 +195,16 @@ def generate_token(private_pem, username=None, scopes=None, force=False):
 
     """
 
-    global token
-    global refresh_time
+    global _token
+    global _refresh_time
 
     current_time = datetime.datetime.utcnow()
 
-    if not refresh_time:
-        refresh_time = datetime.datetime.utcnow() - datetime.timedelta(seconds=3600)
+    if not _refresh_time:
+        _refresh_time = datetime.datetime.utcnow() - datetime.timedelta(seconds=3600)
 
     # Check how much time is remaining on the current token
-    token_time = (current_time - refresh_time).total_seconds()
+    token_time = (current_time - _refresh_time).total_seconds()
 
     # Update the token if force = True or the token is older than the refresh duration
     if force or token_time > _TOKEN_REFRESH_DURATION:
@@ -245,8 +254,8 @@ def generate_token(private_pem, username=None, scopes=None, force=False):
         logger.debug(msg)
 
         # Update the globals
-        token = f'Bearer {token_str}'
-        refresh_time = current_time
+        _token = f'Bearer {token_str}'
+        _refresh_time = current_time
 
     # Other wise
     else:
@@ -282,10 +291,10 @@ def authenticate(server, username=None, password=None, force=False, rsa=False):
 
     """
 
-    global token
-    global refresh_time
+    global _token
+    global _refresh_time
 
-    if token is not None and not force:
+    if _token is not None and not force:
         return True
 
     if not username:
@@ -302,35 +311,26 @@ def authenticate(server, username=None, password=None, force=False, rsa=False):
         # Prompt for RSA passcode
         password = getpass.getpass('Enter Passcode for %s:' % username)
 
+    headers = {}
     if rsa:
         headers = {'X-AUTH-METHOD': 'rsa'}
-        try:
-            msg = f"Executing REST API Call to endpoint: {server}{auth_endpoint}"
-            logger.debug(msg)
-            logon = requests.get(server + auth_endpoint, auth=requests.auth.HTTPBasicAuth(username, password),
-                                 verify=ssl_verify, headers=headers)
-        except requests.ConnectionError as err:
-            msg = f"Failed to communicate with: {server}."
-            logger.error(msg)
-            msg = f"Error: {repr(err)}"
-            logger.error(msg)
-            return False
-    else:
-        try:
-            msg = f"Executing REST API Call to endpoint: {server}{auth_endpoint}"
-            logger.debug(msg)
-            logon = requests.get(server + auth_endpoint, auth=requests.auth.HTTPBasicAuth(username, password),
-                                 verify=ssl_verify)
-        except requests.ConnectionError as err:
-            msg = f"Failed to communicate with: {server}."
-            logger.error(msg)
-            msg = f"Error: {repr(err)}"
-            logger.error(msg)
-            return False
+
+    try:
+        msg = f"Executing REST API Call to endpoint: {server}{auth_endpoint}"
+        logger.debug(msg)
+        logon = requests.get(server + auth_endpoint, auth=requests.auth.HTTPBasicAuth(username, password),
+                             verify=ssl_verify, headers=headers)
+    except requests.ConnectionError as err:
+        msg = f"Failed to communicate with: {server}."
+        logger.error(msg)
+        msg = f"Error: {repr(err)}"
+        logger.error(msg)
+        return False
+
     if response_handler(logon):
-        token = f"Bearer {json.loads(logon.text)['access_token']}"
-        refresh_time = datetime.datetime.utcnow()
-        msg = f"Successful login to {server} as {username} with token: {token}"
+        _token = f"Bearer {json.loads(logon.text)['access_token']}"
+        _refresh_time = datetime.datetime.utcnow()
+        msg = f"Successful login to {server} as {username} with token: {_token}"
         logger.debug(msg)
         return True
     else:
@@ -353,19 +353,19 @@ def refresh_auth(server, force=False):
 
     Returns
     -------
-    True if successful, False for failure
+
     """
 
-    global token
-    global refresh_time
+    global _token
+    global _refresh_time
 
-    token_time_remaining = (datetime.datetime.utcnow() - refresh_time).total_seconds()
+    token_time_remaining = (datetime.datetime.utcnow() - _refresh_time).total_seconds()
 
-    if force or token_time_remaining > _TOKEN_REFRESH_DURATION:
+    if force or _stale_token():
         logger.debug('Forced refresh of token.')
         renew_header = {
             'Content-Type': 'application/json',
-            'Authorization': token
+            'Authorization': _token
         }
 
         try:
@@ -375,19 +375,49 @@ def refresh_auth(server, force=False):
             logger.error(msg)
             msg = f"Error: {repr(err)}"
             logger.error(msg)
-            return False
+            raise IngeniumLibError(msg)
+            
 
         if response_handler(refresh):
-            token = f"Bearer {json.loads(refresh.text)['access_token']}"
-            refresh_time = datetime.datetime.utcnow()
+            _token = f"Bearer {json.loads(refresh.text)['access_token']}"
+            _refresh_time = datetime.datetime.utcnow()
             msg = f"Successfully refreshed token with: {server}"
             logger.debug(msg)
-            return True
+            return 
         else:
-            logger.error("Failed to refresh token.")
-            return False
+            msg = "Failed to refresh token."
+            logger.error(msg)
+            raise IngeniumLibError(msg)
 
     else:
         msg = f"Time remaining on token: {token_time_remaining} seconds is less than limit: {_TOKEN_REFRESH_DURATION}. No refresh needed."
         logger.debug(msg)
+        return 
+
+
+def get_token():
+    return _token
+
+
+def get_refresh_time():
+    return _refresh_time
+
+
+def _auth_header():
+    token = get_token()
+    if not token:
+        raise IngeniumLibError()
+    return {"Authorization": token}
+
+
+def _stale_token():
+    token = get_token()
+    if token is None or _refresh_time is None:
         return True
+    elapsed = (datetime.datetime.utcnow() - _refresh_time).total_seconds()
+    return elapsed > _TOKEN_REFRESH_DURATION
+
+
+def _extact_server(endpoint):
+    parsed = urlparse(endpoint)
+    return f'{parsed.scheme}://{parsed.netloc}'
