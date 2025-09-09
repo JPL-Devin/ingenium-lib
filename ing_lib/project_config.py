@@ -9,12 +9,13 @@ Authors:
 
 ##################################################################### Imports
 import requests
-import common
-import logging
+from common import _auth_header,dictionary_endpoint,ssl_verify
+from common import IngeniumLibError,response_handler,ingenium_rest_get,ingenium_rest_get_paginated
+from logs import get_logger
 
 ##################################################### Functions ######################################################
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 def get_dictionary_versions(server, flight_sse, query={}, api_version='v4'):
     """
@@ -39,12 +40,12 @@ def get_dictionary_versions(server, flight_sse, query={}, api_version='v4'):
         Two Lists of JSON objects
     """
 
-    endpoint = f"{server}{common.dictionary_endpoint}{api_version}/dictionaries/{flight_sse}/versions"
+    endpoint = f"{server}{dictionary_endpoint}{api_version}/dictionaries/{flight_sse}/versions"
 
     msg = f"Querying Ingenium Flight Dictionary Versions from: {endpoint}"
     logger.info(msg)
 
-    versions = common.ingenium_rest_get_paginated(endpoint,query_params = query)
+    versions = ingenium_rest_get_paginated(endpoint,query_params = query)
 
     return versions
 
@@ -70,23 +71,23 @@ def delete_dictionary_version(server, flight_sse, dictionary_version):
         JSON object containing dictionary details
     """
 
-    endpoint = f'{server}{common.dictionary_endpoint}v4/dictionaries/{flight_sse}/versions/{dictionary_version}'
+    endpoint = f'{server}{dictionary_endpoint}v4/dictionaries/{flight_sse}/versions/{dictionary_version}'
 
     try:
-        res = requests.delete(endpoint, headers={'Authorization': common.token},
-                                      verify=common.ssl_verify)
+        res = requests.delete(endpoint, headers=_auth_header(),
+                                      verify=ssl_verify)
     except requests.ConnectionError:
         msg = f"Failed to communicate with: {server}"
         logger.error(msg)
-        raise common.IngeniumLibError(msg)
+        raise IngeniumLibError(msg)
 
-    if common.response_handler(res):
+    if response_handler(res):
         pass
         # Note no action is required if 204 is received (empty JSON)
     else:
         msg = f"Response not completed successfully to {endpoint}"
         logger.error(msg)
-        raise common.IngeniumLibError(msg)
+        raise IngeniumLibError(msg)
 
 
 def get_dictionary(server, dictionary, flight_sse, dict_type, query={}, api_version='v4'):
@@ -125,17 +126,17 @@ def get_dictionary(server, dictionary, flight_sse, dict_type, query={}, api_vers
     if dict_type not in ['cmds', 'evrs', 'channels', 'mil1553']:
         msg = f"Unknown dictionary type: {dict_type}. Supported options: cmds, evrs, channels, mil1553."
         logger.error(msg)
-        raise common.IngeniumLibError(msg)
+        raise IngeniumLibError(msg)
     # Channels used to be called "ehas" (JPL specific name for channels)
     if api_version == 'v3' and dict_type == 'channels':
         dict_type = 'ehas'
 
-    endpoint = f'{server}{common.dictionary_endpoint}{api_version}/dictionaries/{flight_sse}/versions/{dictionary}/{dict_type}'
+    endpoint = f'{server}{dictionary_endpoint}{api_version}/dictionaries/{flight_sse}/versions/{dictionary}/{dict_type}'
 
     msg = f"Querying Ingenium Dictionary Versions: {dictionary} ({flight_sse}) from: {endpoint}"
     logger.info(msg)
 
-    dictionary_content = common.ingenium_rest_get_paginated(endpoint, query_params = query)
+    dictionary_content = ingenium_rest_get_paginated(endpoint, query_params = query)
 
     return dictionary_content
 
@@ -168,17 +169,17 @@ def get_dictionary_element(server, dictionary, flight_sse, dict_type, element_na
     if dict_type not in ['cmds', 'evrs', 'channels', 'mil1553']:
         msg = f"Unknown dictionary type: {dict_type}. Supported options: cmds, evrs, channels, mil1553."
         logger.error(msg)
-        raise common.IngeniumLibError(msg)
+        raise IngeniumLibError(msg)
     # Channels used to be called "ehas" (JPL specific name for channels)
     if api_version == 'v3' and dict_type == 'channels':
         dict_type = 'ehas'
 
-    endpoint = f'{server}{common.dictionary_endpoint}{api_version}/dictionaries/{flight_sse}/versions/{dictionary}/{dict_type}/{element_name}'
+    endpoint = f'{server}{dictionary_endpoint}{api_version}/dictionaries/{flight_sse}/versions/{dictionary}/{dict_type}/{element_name}'
 
     msg = f"Querying Ingenium Dictionary: {dictionary} ({flight_sse}) for: {element_name}"
     logger.debug(msg)
 
-    element_content = common.ingenium_rest_get(endpoint)
+    element_content = ingenium_rest_get(endpoint)
 
     return element_content
 
@@ -203,11 +204,11 @@ def get_custom_scripts(server, query={}, api_version='v3'):
     custom_scripts
         JSON object containing an array of custom scripts
     """
-    endpoint = f'{server}{common.dictionary_endpoint}{api_version}/custom_scripts'
+    endpoint = f'{server}{dictionary_endpoint}{api_version}/custom_scripts'
 
     msg = f"Querying Ingenium ({server}) for custom scripts."
     logger.info(msg)
-    custom_scripts = common.ingenium_rest_get_paginated(endpoint, query_params=query)
+    custom_scripts = ingenium_rest_get_paginated(endpoint, query_params=query)
 
     return custom_scripts
 
@@ -230,12 +231,12 @@ def get_vnv_vis(server, query={}, api_version='v3'):
         JSON object containing an array of Verification Items
     """
 
-    endpoint = f'{server}{common.dictionary_endpoint}{api_version}/vnv/vis'
+    endpoint = f'{server}{dictionary_endpoint}{api_version}/vnv/vis'
 
     msg = f"Querying Ingenium({server}) for Verification Items."
     logger.info(msg)
 
-    vis = common.ingenium_rest_get_paginated(endpoint, query_params = query)
+    vis = ingenium_rest_get_paginated(endpoint, query_params = query)
 
     return vis
 
@@ -261,23 +262,23 @@ def get_vnv_vis_bulk(server, bulk_list, api_version='v3'):
         JSON object containing an array of Verification Items
     """
 
-    endpoint = f'{server}{common.dictionary_endpoint}{api_version}/vnv/vis/bulk_query'
+    endpoint = f'{server}{dictionary_endpoint}{api_version}/vnv/vis/bulk_query'
 
     try:
-        res = requests.post(endpoint, headers={'Authorization': common.token},
-                                      verify=common.ssl_verify,
+        res = requests.post(endpoint, headers=_auth_header(),
+                                      verify=ssl_verify,
                                       json=bulk_list)
     except requests.ConnectionError:
         msg = f"Failed to communicate with: {server}"
         logger.error(msg)
-        raise common.IngeniumLibError(msg)
+        raise IngeniumLibError(msg)
 
-    if common.response_handler(res):
+    if response_handler(res):
         vis = res.json()
     else:
         msg = f"Response not completed successfully to {endpoint}"
         logger.error(msg)
-        raise common.IngeniumLibError(msg)
+        raise IngeniumLibError(msg)
 
     return vis
 
@@ -305,23 +306,23 @@ def create_dictionary_version(server, flight_sse, content):
         JSON object containing dictionary details
     """
 
-    endpoint = f'{server}{common.dictionary_endpoint}v4/dictionaries/{flight_sse}/versions'
+    endpoint = f'{server}{dictionary_endpoint}v4/dictionaries/{flight_sse}/versions'
 
     try:
-        res = requests.post(endpoint, headers={'Authorization': common.token},
-                                      verify=common.ssl_verify,
+        res = requests.post(endpoint, headers=_auth_header(),
+                                      verify=ssl_verify,
                                       json=content)
     except requests.ConnectionError:
         msg = f"Failed to communicate with: {server}"
         logger.error(msg, exc_info=True)
-        raise common.IngeniumLibError(msg)
+        raise IngeniumLibError(msg)
 
-    if common.response_handler(res):
+    if response_handler(res):
         data = res.json()
     else:
         msg = f"Response not completed successfully to {endpoint}"
         logger.error(msg)
-        raise common.IngeniumLibError(msg)
+        raise IngeniumLibError(msg)
 
     return data
 
@@ -351,23 +352,23 @@ def update_dictionary_version(server, flight_sse, dictionary_version, content):
         JSON object containing dictionary details
     """
 
-    endpoint = f'{server}{common.dictionary_endpoint}v4/dictionaries/{flight_sse}/versions/{dictionary_version}'
+    endpoint = f'{server}{dictionary_endpoint}v4/dictionaries/{flight_sse}/versions/{dictionary_version}'
 
     try:
-        res = requests.patch(endpoint, headers={'Authorization': common.token},
-                                      verify=common.ssl_verify,
+        res = requests.patch(endpoint, headers=_auth_header(),
+                                      verify=ssl_verify,
                                       json=content)
     except requests.ConnectionError:
         msg = f"Failed to communicate with: {server}"
         logger.error(msg)
-        raise common.IngeniumLibError(msg)
+        raise IngeniumLibError(msg)
 
-    if common.response_handler(res):
+    if response_handler(res):
         data = res.json()
     else:
         msg = f"Response not completed successfully to {endpoint}"
         logger.error(msg)
-        raise common.IngeniumLibError(msg)
+        raise IngeniumLibError(msg)
 
     return data
 
@@ -399,23 +400,23 @@ def create_dictionary_content(server, flight_sse, content, dictionary_version, d
         JSON object containing arrays of dictionary content
     """
 
-    endpoint = f'{server}{common.dictionary_endpoint}v4/dictionaries/{flight_sse}/versions/{dictionary_version}/{dictionary_type}'
+    endpoint = f'{server}{dictionary_endpoint}v4/dictionaries/{flight_sse}/versions/{dictionary_version}/{dictionary_type}'
 
     try:
-        res = requests.post(endpoint, headers={'Authorization': common.token},
-                                      verify=common.ssl_verify,
+        res = requests.post(endpoint, headers=_auth_header(),
+                                      verify=ssl_verify,
                                       json=content)
     except requests.ConnectionError:
         msg = f"Failed to communicate with: {server}"
         logger.error(msg)
-        raise common.IngeniumLibError(msg)
+        raise IngeniumLibError(msg)
 
-    if common.response_handler(res):
+    if response_handler(res):
         data = res.json()
     else:
         msg = f"Response not completed successfully to {endpoint}"
         logger.error(msg)
-        raise common.IngeniumLibError(msg)
+        raise IngeniumLibError(msg)
 
     return data
 
@@ -438,23 +439,23 @@ def create_custom_script(server, content):
         JSON object containing an array of custom scripts
     """
 
-    endpoint = f'{server}{common.dictionary_endpoint}v4/custom_scripts'
+    endpoint = f'{server}{dictionary_endpoint}v4/custom_scripts'
 
     try:
-        res = requests.post(endpoint, headers={'Authorization': common.token},
-                                      verify=common.ssl_verify,
+        res = requests.post(endpoint, headers=_auth_header(),
+                                      verify=ssl_verify,
                                       json=content)
     except requests.ConnectionError:
         msg = f"Failed to communicate with: {server}"
         logger.error(msg)
-        raise common.IngeniumLibError(msg)
+        raise IngeniumLibError(msg)
 
-    if common.response_handler(res):
+    if response_handler(res):
         data = res.json()
     else:
         msg = f"Response not completed successfully to {endpoint}"
         logger.error(msg)
-        raise common.IngeniumLibError(msg)
+        raise IngeniumLibError(msg)
 
     return data
 
@@ -480,23 +481,23 @@ def update_custom_script(server, script_id, content):
         JSON object containing an array of custom scripts
     """
 
-    endpoint = f'{server}{common.dictionary_endpoint}v4/custom_scripts/{script_id}'
+    endpoint = f'{server}{dictionary_endpoint}v4/custom_scripts/{script_id}'
 
     try:
-        res = requests.patch(endpoint, headers={'Authorization': common.token},
-                                      verify=common.ssl_verify,
+        res = requests.patch(endpoint, headers=_auth_header(),
+                                      verify=ssl_verify,
                                       json=content)
     except requests.ConnectionError:
         msg = f"Failed to communicate with: {server}"
         logger.error(msg)
-        raise common.IngeniumLibError(msg)
+        raise IngeniumLibError(msg)
 
-    if common.response_handler(res):
+    if response_handler(res):
         data = res.json()
     else:
         msg = f"Response not completed successfully to {endpoint}"
         logger.error(msg)
-        raise common.IngeniumLibError(msg)
+        raise IngeniumLibError(msg)
 
     return data
 
@@ -517,52 +518,23 @@ def delete_custom_script(server, script_id):
     -------
     """
 
-    endpoint = f'{server}{common.dictionary_endpoint}v4/custom_scripts/{script_id}'
-
-    try:
-        res = requests.delete(endpoint, headers={'Authorization': common.token},
-                                      verify=common.ssl_verify)
-    except requests.ConnectionError:
-        msg = f"Failed to communicate with: {server}"
-        logger.error(msg)
-        raise common.IngeniumLibError(msg)
-
-    if common.response_handler(res):
-        pass
-        # Note no action is required if 204 is received (empty JSON)
-    else:
-        msg = f"Response not completed successfully to {endpoint}"
-        logger.error(msg)
-        raise common.IngeniumLibError(msg)
-
-
-def delete_custom_script_by_id(server, script_id):
-    """
-    Deletes a custom script by its ID. Note only compatible with V4 of the API
-
-    Parameters
-    ----------
-    server: str
-        Ingenium Server (e.g. https://ingenium-example.com) without a trailing slash
-    script_id: str
-        Unique ID of the script to delete.
-    """
-    endpoint = f'{server}{common.dictionary_endpoint}v4/custom_scripts/{script_id}'
+    endpoint = f'{server}{dictionary_endpoint}v4/custom_scripts/{script_id}'
     logger.info(f"Deleting custom script with ID: {script_id}")
     try:
-        res = requests.delete(endpoint, headers={'Authorization': common.token}, verify=common.ssl_verify)
+        res = requests.delete(endpoint, headers=_auth_header(),
+                              verify=ssl_verify)
         if res.status_code == 404:
             logger.warning(f"Custom script with ID {script_id} not found on server, nothing to delete.")
-        elif common.response_handler(res):
+        elif response_handler(res):
             logger.info(f"Successfully deleted custom script with ID: {script_id}")
         else:
             msg = f"Failed to delete custom script with ID {script_id}"
             logger.error(msg)
-            raise common.IngeniumLibError(msg)
+            raise IngeniumLibError(msg)
     except requests.ConnectionError as e:
         msg = f"Failed to communicate with {server}: {e}"
         logger.error(msg)
-        raise common.IngeniumLibError(msg)
+        raise IngeniumLibError(msg)
 
 
 def create_vnv_vis(server, content):
@@ -583,18 +555,18 @@ def create_vnv_vis(server, content):
         JSON object containing dictionary details
     """
 
-    endpoint = f'{server}{common.dictionary_endpoint}v4/vnv/vis'
+    endpoint = f'{server}{dictionary_endpoint}v4/vnv/vis'
 
     try:
-        res = requests.post(endpoint, headers={'Authorization': common.token},
-                                      verify=common.ssl_verify,
+        res = requests.post(endpoint, headers=_auth_header(),
+                                      verify=ssl_verify,
                                       json=content)
     except requests.ConnectionError:
         msg = f"Failed to communicate with: {server}"
         logger.error(msg)
-        raise common.IngeniumLibError(msg)
+        raise IngeniumLibError(msg)
 
-    if common.response_handler(res):
+    if response_handler(res):
         data = res.json()
     else:
         msg = f"Response not completed successfully to {endpoint}"
@@ -625,21 +597,21 @@ def update_vnv_vi(server, vi_id, content):
         JSON object containing dictionary details
     """
 
-    endpoint = f'{server}{common.dictionary_endpoint}v4/vnv/vis/{vi_id}'
+    endpoint = f'{server}{dictionary_endpoint}v4/vnv/vis/{vi_id}'
 
     try:
-        res = requests.patch(endpoint, headers={'Authorization': common.token}, verify=common.ssl_verify, json=content)
+        res = requests.patch(endpoint, headers=_auth_header(), verify=ssl_verify, json=content)
     except requests.ConnectionError:
         msg = f"Failed to communicate with: {server}"
         logger.error(msg)
-        raise common.IngeniumLibError(msg)
+        raise IngeniumLibError(msg)
 
-    if common.response_handler(res):
+    if response_handler(res):
         data = res.json()
     else:
         msg = f"Response not completed successfully to {endpoint}"
         logger.error(msg)
-        raise common.IngeniumLibError(msg)
+        raise IngeniumLibError(msg)
 
     return data
 
@@ -660,19 +632,19 @@ def delete_vnv_vi(server, vi_id):
     -------
     """
 
-    endpoint = f'{server}{common.dictionary_endpoint}v4/vnv/vis/{vi_id}'
+    endpoint = f'{server}{dictionary_endpoint}v4/vnv/vis/{vi_id}'
 
     try:
-        res = requests.delete(endpoint, headers={'Authorization': common.token}, verify=common.ssl_verify)
+        res = requests.delete(endpoint, headers=_auth_header(), verify=ssl_verify)
     except requests.ConnectionError:
         msg = f"Failed to communicate with: {server}"
         logger.error(msg)
-        raise common.IngeniumLibError(msg)
+        raise IngeniumLibError(msg)
 
-    if common.response_handler(res):
+    if response_handler(res):
         pass
         # Note no action is required if 204 is received (empty JSON)
     else:
         msg = f"Response not completed successfully to {endpoint}"
         logger.error(msg)
-        raise common.IngeniumLibError(msg)
+        raise IngeniumLibError(msg)
