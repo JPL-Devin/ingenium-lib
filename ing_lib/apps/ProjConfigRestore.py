@@ -7,8 +7,8 @@ Authors:
 
 ##################################################### Imports ######################################################
 import logging
-from logs import init_console_logger
-init_console_logger(logging.INFO)
+from logs import init_console_logger,get_logger
+init_console_logger()
 
 import common
 from project_config import create_dictionary_version,create_dictionary_content,create_custom_script,create_vnv_vis
@@ -20,7 +20,7 @@ import json
 
 ##################################################### Functions ######################################################
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 def get_input(args=[]):
     """
@@ -61,7 +61,8 @@ def get_input(args=[]):
 
     # Setup debug logging (if desired)
     if inputs.debug:
-        for handler in logger.root.handlers:
+        get_logger().setLevel(logging.DEBUG)
+        for handler in get_logger().handlers:
             handler.setLevel(logging.DEBUG)
             logger.debug("Logging set to Debug.")
     return inputs
