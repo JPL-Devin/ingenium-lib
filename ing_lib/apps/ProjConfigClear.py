@@ -154,7 +154,7 @@ def main(args=[]):
     if inputs.rsa:
         pw_prompt = f"Enter RSA Passcode for {username}:"
     else:
-        pw_prompt = f"Enter LDAP Passcode for {username}:"
+        pw_prompt = f"Enter LDAP Password for {username}:"
 
     # Login to source_execution
     login = common.authenticate(inputs.server, username=username, password=getpass.getpass(pw_prompt), force=True,
