@@ -21,10 +21,6 @@
         <!--' A Lookback is also a common input used with time - providing a negative offset for queries based on start time'-->
         <input_field name="lookback" description="Look Back" phase="AUTHORING" required="YES" type="INT" default_value="60"></input_field>
 
-        <!--' A Datapath is a way to abstract a pointer to a specific instance or stream of data in the AMPCS ground data syste'-->
-        <!--' These are initialized via the Manual GDS step which maps a Datapath string to a specific integer session id and then this relationship mapsA Datapath is a way to abstract a pointer to a specific instance or stream of data in the AMPCS ground data syste'-->
-        <input_field name="datapath" description="Data Path" phase="AUTHORING" required="YES" type="DATA_PATH"></input_field>
-
         <!--' A Flight Command is comma seperated string of command stem and command arguments.'-->
         <!--' It has a special UI/UX component that provides autocomplete, lookup, and a command builder based the selected dictionary.'-->
         <input_field name="flight_cmd" description="Flight Command" phase="AUTHORING" required="YES" type="FLIGHT_COMMAND"></input_field>
@@ -127,7 +123,7 @@
             <section>
                 <section_header>
                     <layout_display>
-                        <template template="Sending Commands and Files via {datapath}"></template>
+                        <template template="Sending Commands and Files"></template>
                         <layout row="1" column="1" width="4" height="1" align="LEFT"></layout>
                     </layout_display>
                     <layout_display>
@@ -162,10 +158,6 @@
                     <layout_field field_name="lookback">
                         <label label_content="Lookback (s)" label_loc="TOP" label_align="CENTER"></label>
                         <layout row="1" column="7" width="3" height="1" align="LEFT"></layout>
-                    </layout_field>
-                    <layout_field field_name="datapath">
-                        <label label_content="Data Path" label_loc="TOP" label_align="CENTER"></label>
-                        <layout row="1" column="10" width="3" height="1" align="LEFT"></layout>
                     </layout_field>
                     <layout_field field_name="flight_cmd">
                         <label label_content="Flight Command" label_loc="LEFT" label_align="CENTER"></label>

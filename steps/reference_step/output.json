@@ -4,7 +4,6 @@
         "start_time": "2025-302T13:17:34.053",
         "timeout": 60,
         "lookback": 60,
-        "datapath": "84",
         "flight_cmd": "CMD-1234,ARG1,ARG2",
         "sim_cmd": "SIM-5678,ARGX",
         "measured_volts": 60,
