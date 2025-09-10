@@ -7,7 +7,7 @@
     <header mission_name="Test"></header>
     <!--' The ProjConfigCreateUpdateCS.py script will populate the hash/id for each script, and will update the path per the base Ingenium path.'-->
     <!--' Script path should be the relative path to the script file with respect to the custom script xml (typically stored in the same directory) '-->
-    <custom_script script_name="reference_step" script_path="reference_step.py" description="Reference Script" hash="SHA256 Hash of your script - populated by create_catalog.py" script_id="unique id of your script - populated by create_catalog.py">
+    <custom_script script_name="reference_step" script_path="reference_step.py" description="Reference Script" hash="SHA256 Hash of your script - populated by create_catalog.py" script_id="unique id of your script - populated by create_catalog.py" is_command="true">
         <!--' Custom Scripts/Step first document all the inputs/outputs the script accepts/produces '-->
         
         <!--' Time is a common general input (e.g. establishes the time range for when to look for telemetry'-->
