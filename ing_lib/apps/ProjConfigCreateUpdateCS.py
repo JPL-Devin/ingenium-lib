@@ -777,7 +777,7 @@ def validate_script_data(script_data):
     """
     import re
 
-    required_fields = ['script_name', 'script_path', 'description', 'script_id']
+    required_fields = ['script_name', 'script_path', 'description', 'script_id', 'is_command']
 
     for field in required_fields:
         if not script_data.get(field):
