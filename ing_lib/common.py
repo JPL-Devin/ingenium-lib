@@ -25,10 +25,9 @@ procedure_endpoint = "/core_server/api/v5/procedures"
 as_run_endpoint = "/core_server/api/v5/executions"
 dictionary_endpoint = "/dict_server/api/"
 
-############################################################# Global
-_token = None
-ssl_verify = True
-_refresh_time = None
+_store = {'token': None,
+          'refresh_time': None,
+          'ssl_verify': True}
 
 ############################################################# Constants
 _TOKEN_REFRESH_DURATION = 3000
@@ -100,7 +99,7 @@ def ingenium_rest_get(endpoint):
 
     data = None
 
-    data_req = requests.get(endpoint, headers=_auth_header(), verify=ssl_verify)
+    data_req = requests.get(endpoint, headers=_auth_header(), verify=get_ssl_verify())
 
     if response_handler(data_req):
         data = data_req.json()
@@ -148,7 +147,7 @@ def ingenium_rest_get_paginated(endpoint, query_params={}):
         query_params['limit'] = limit
         query_params['offset'] = offset
 
-        data_req = requests.get(endpoint, headers=_auth_header(), verify=ssl_verify, params=query_params)
+        data_req = requests.get(endpoint, headers=_auth_header(), verify=get_ssl_verify(), params=query_params)
 
         if response_handler(data_req):
             data = data_req.json()
@@ -195,16 +194,13 @@ def generate_token(private_pem, username=None, scopes=None, force=False):
 
     """
 
-    global _token
-    global _refresh_time
-
     current_time = datetime.datetime.utcnow()
 
-    if not _refresh_time:
+    if not _store.get('refresh_time'):
         _refresh_time = datetime.datetime.utcnow() - datetime.timedelta(seconds=3600)
 
     # Check how much time is remaining on the current token
-    token_time = (current_time - _refresh_time).total_seconds()
+    token_time = (current_time - _store.get('refresh_time')).total_seconds()
 
     # Update the token if force = True or the token is older than the refresh duration
     if force or token_time > _TOKEN_REFRESH_DURATION:
@@ -254,8 +250,8 @@ def generate_token(private_pem, username=None, scopes=None, force=False):
         logger.debug(msg)
 
         # Update the globals
-        _token = f'Bearer {token_str}'
-        _refresh_time = current_time
+        _store['token'] = f'Bearer {token_str}'
+        _store['refresh_time'] = current_time
 
     # Other wise
     else:
@@ -291,10 +287,7 @@ def authenticate(server, username=None, password=None, force=False, rsa=False):
 
     """
 
-    global _token
-    global _refresh_time
-
-    if _token is not None and not force:
+    if _store['token'] is not None and not force:
         return True
 
     if not username:
@@ -319,7 +312,7 @@ def authenticate(server, username=None, password=None, force=False, rsa=False):
         msg = f"Executing REST API Call to endpoint: {server}{auth_endpoint}"
         logger.debug(msg)
         logon = requests.get(server + auth_endpoint, auth=requests.auth.HTTPBasicAuth(username, password),
-                             verify=ssl_verify, headers=headers)
+                             verify=get_ssl_verify(), headers=headers)
     except requests.ConnectionError as err:
         msg = f"Failed to communicate with: {server}."
         logger.error(msg)
@@ -328,9 +321,12 @@ def authenticate(server, username=None, password=None, force=False, rsa=False):
         return False
 
     if response_handler(logon):
-        _token = f"Bearer {json.loads(logon.text)['access_token']}"
-        _refresh_time = datetime.datetime.utcnow()
-        msg = f"Successful login to {server} as {username} with token: {_token}"
+        _store['token'] = f"Bearer {json.loads(logon.text)['access_token']}"
+        _store['refresh_time'] = datetime.datetime.utcnow()
+
+        #_token = f"Bearer {json.loads(logon.text)['access_token']}"
+        #_refresh_time = datetime.datetime.utcnow()
+        msg = f"Successful login to {server} as {username} with token: {_store['token'] }"
         logger.debug(msg)
         return True
     else:
@@ -356,20 +352,17 @@ def refresh_auth(server, force=False):
 
     """
 
-    global _token
-    global _refresh_time
-
-    token_time_remaining = (datetime.datetime.utcnow() - _refresh_time).total_seconds()
+    token_time_remaining = (datetime.datetime.utcnow() - _store['refresh_time'] ).total_seconds()
 
     if force or _stale_token():
         logger.debug('Forced refresh of token.')
         renew_header = {
             'Content-Type': 'application/json',
-            'Authorization': _token
+            'Authorization': _store['token']
         }
 
         try:
-            refresh = requests.post(server + refresh_endpoint, headers=renew_header, verify=ssl_verify)
+            refresh = requests.post(server + refresh_endpoint, headers=renew_header, verify=get_ssl_verify())
         except requests.ConnectionError as err:
             msg = f"Failed to communicate with: {server}."
             logger.error(msg)
@@ -379,8 +372,8 @@ def refresh_auth(server, force=False):
             
 
         if response_handler(refresh):
-            _token = f"Bearer {json.loads(refresh.text)['access_token']}"
-            _refresh_time = datetime.datetime.utcnow()
+            _store['token'] = f"Bearer {json.loads(logon.text)['access_token']}"
+            _store['refresh_time'] = datetime.datetime.utcnow()
             msg = f"Successfully refreshed token with: {server}"
             logger.debug(msg)
             return 
@@ -396,11 +389,15 @@ def refresh_auth(server, force=False):
 
 
 def get_token():
-    return _token
+    return _store['token']
 
 
 def get_refresh_time():
-    return _refresh_time
+    return _store['refresh_time']
+
+
+def get_ssl_verify():
+    return _store['ssl_verify']
 
 
 def _auth_header():
@@ -412,9 +409,9 @@ def _auth_header():
 
 def _stale_token():
     token = get_token()
-    if token is None or _refresh_time is None:
+    if token is None or _store['refresh_time'] is None:
         return True
-    elapsed = (datetime.datetime.utcnow() - _refresh_time).total_seconds()
+    elapsed = (datetime.datetime.utcnow() - _store['refresh_time']).total_seconds()
     return elapsed > _TOKEN_REFRESH_DURATION
 
 
