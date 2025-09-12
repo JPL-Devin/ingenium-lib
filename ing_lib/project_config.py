@@ -9,7 +9,7 @@ Authors:
 
 ##################################################################### Imports
 import requests
-from common import _auth_header,dictionary_endpoint,ssl_verify
+from common import _auth_header,dictionary_endpoint,get_ssl_verify
 from common import IngeniumLibError,response_handler,ingenium_rest_get,ingenium_rest_get_paginated
 from logs import get_logger
 
@@ -75,7 +75,7 @@ def delete_dictionary_version(server, flight_sse, dictionary_version):
 
     try:
         res = requests.delete(endpoint, headers=_auth_header(),
-                                      verify=ssl_verify)
+                                      verify=get_ssl_verify())
     except requests.ConnectionError:
         msg = f"Failed to communicate with: {server}"
         logger.error(msg)
@@ -266,7 +266,7 @@ def get_vnv_vis_bulk(server, bulk_list, api_version='v3'):
 
     try:
         res = requests.post(endpoint, headers=_auth_header(),
-                                      verify=ssl_verify,
+                                      verify=get_ssl_verify(),
                                       json=bulk_list)
     except requests.ConnectionError:
         msg = f"Failed to communicate with: {server}"
@@ -310,7 +310,7 @@ def create_dictionary_version(server, flight_sse, content):
 
     try:
         res = requests.post(endpoint, headers=_auth_header(),
-                                      verify=ssl_verify,
+                                      verify=get_ssl_verify(),
                                       json=content)
     except requests.ConnectionError:
         msg = f"Failed to communicate with: {server}"
@@ -356,7 +356,7 @@ def update_dictionary_version(server, flight_sse, dictionary_version, content):
 
     try:
         res = requests.patch(endpoint, headers=_auth_header(),
-                                      verify=ssl_verify,
+                                      verify=get_ssl_verify(),
                                       json=content)
     except requests.ConnectionError:
         msg = f"Failed to communicate with: {server}"
@@ -404,7 +404,7 @@ def create_dictionary_content(server, flight_sse, content, dictionary_version, d
 
     try:
         res = requests.post(endpoint, headers=_auth_header(),
-                                      verify=ssl_verify,
+                                      verify=get_ssl_verify(),
                                       json=content)
     except requests.ConnectionError:
         msg = f"Failed to communicate with: {server}"
@@ -443,7 +443,7 @@ def create_custom_script(server, content):
 
     try:
         res = requests.post(endpoint, headers=_auth_header(),
-                                      verify=ssl_verify,
+                                      verify=get_ssl_verify(),
                                       json=content)
     except requests.ConnectionError:
         msg = f"Failed to communicate with: {server}"
@@ -485,7 +485,7 @@ def update_custom_script(server, script_id, content):
 
     try:
         res = requests.patch(endpoint, headers=_auth_header(),
-                                      verify=ssl_verify,
+                                      verify=get_ssl_verify(),
                                       json=content)
     except requests.ConnectionError:
         msg = f"Failed to communicate with: {server}"
@@ -522,7 +522,7 @@ def delete_custom_script(server, script_id):
     logger.info(f"Deleting custom script with ID: {script_id}")
     try:
         res = requests.delete(endpoint, headers=_auth_header(),
-                              verify=ssl_verify)
+                              verify=get_ssl_verify())
         if res.status_code == 404:
             logger.warning(f"Custom script with ID {script_id} not found on server, nothing to delete.")
         elif response_handler(res):
@@ -559,7 +559,7 @@ def create_vnv_vis(server, content):
 
     try:
         res = requests.post(endpoint, headers=_auth_header(),
-                                      verify=ssl_verify,
+                                      verify=get_ssl_verify(),
                                       json=content)
     except requests.ConnectionError:
         msg = f"Failed to communicate with: {server}"
@@ -600,7 +600,7 @@ def update_vnv_vi(server, vi_id, content):
     endpoint = f'{server}{dictionary_endpoint}v4/vnv/vis/{vi_id}'
 
     try:
-        res = requests.patch(endpoint, headers=_auth_header(), verify=ssl_verify, json=content)
+        res = requests.patch(endpoint, headers=_auth_header(), verify=get_ssl_verify(), json=content)
     except requests.ConnectionError:
         msg = f"Failed to communicate with: {server}"
         logger.error(msg)
@@ -635,7 +635,7 @@ def delete_vnv_vi(server, vi_id):
     endpoint = f'{server}{dictionary_endpoint}v4/vnv/vis/{vi_id}'
 
     try:
-        res = requests.delete(endpoint, headers=_auth_header(), verify=ssl_verify)
+        res = requests.delete(endpoint, headers=_auth_header(), verify=get_ssl_verify())
     except requests.ConnectionError:
         msg = f"Failed to communicate with: {server}"
         logger.error(msg)
