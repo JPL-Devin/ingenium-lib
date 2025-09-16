@@ -235,14 +235,14 @@
             </entry_section>
             <section>
                 <section_results>
-                    <layout_display>
-                        <template template="Output file 1: {file_output_1}"></template>
+                    <layout_field field_name="file_output_1">
+                        <label label_content="Output File 1" label_loc="LEFT" label_align="CENTER"></label>
                         <layout row="1" column="1" width="6" height="1" align="LEFT"></layout>
-                    </layout_display>
-                    <layout_display>
-                        <template template="Output file 2: {file_output_2}"></template>
+                    </layout_field>
+                    <layout_field field_name="file_output_2">
+                        <label label_content="Output File 2" label_loc="LEFT" label_align="CENTER"></label>
                         <layout row="1" column="7" width="6" height="1" align="LEFT"></layout>
-                    </layout_display>
+                    </layout_field>
                     <image_display field_name="image_output_1">
                         <label label_content="Image Output" label_loc="TOP" label_align="CENTER"></label>
                         <layout row="2" column="1" width="6" height="6" align="CENTER"></layout>
