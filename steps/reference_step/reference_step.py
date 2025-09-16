@@ -10,7 +10,7 @@ Authors:
 
 '''
 
-import os
+
 import time
 from datetime import datetime, timedelta
 import copy
@@ -215,6 +215,7 @@ if __name__ == '__main__':
         'inputs': inputs,
         'entries': entries,
         'outputs': outputs,
+        'output_array': my_output_array,
         'output_summary': ''
     }
 
@@ -423,9 +424,9 @@ if __name__ == '__main__':
     plot_series(series['series_output_2'], output_dir, GRAPH_FILE_NAME_2)
 
     # Write Files
-    output_path = Path(FILE_NAME_1)
+    output_path = Path(os.path.join(output_dir, FILE_NAME_1))
     output_path.write_text(random_text(10000), encoding="utf-8")
-    output_path = Path(FILE_NAME_2)
+    output_path = Path(os.path.join(output_dir, FILE_NAME_2))
     output_path.write_text(random_text(10000), encoding="utf-8")
     # Report Final custom_script_status
     write_output_file(output_dict, output_file_abs_path)
