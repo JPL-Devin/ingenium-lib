@@ -37,10 +37,6 @@
                 {
                     "entry_output_array_field_1": "1",
                     "entry_output_array_field_2": "10"
-                },
-                {
-                    "entry_output_array_field_1": "2",
-                    "entry_output_array_field_2": "20"
                 }
             ]
         },
@@ -71,18 +67,6 @@
                 {
                     "entry_output_array_field_1": "1",
                     "entry_output_array_field_2": "10"
-                },
-                {
-                    "entry_output_array_field_1": "2",
-                    "entry_output_array_field_2": "20"
-                },
-                {
-                    "entry_output_array_field_1": "3",
-                    "entry_output_array_field_2": "30"
-                },
-                {
-                    "entry_output_array_field_1": "4",
-                    "entry_output_array_field_2": "40"
                 }
             ]
         }
@@ -96,5 +80,70 @@
         "image_output_1": "sample_graph.png",
         "image_output_2": "sample_graph2.png"
     },
+    "output_array": [
+        {
+            "output_array_field_1": 0,
+            "output_array_field_2": 0.0,
+            "output_array_field_3": 0.0,
+            "output_array_field_4": 0,
+            "output_array_field_5": 0,
+            "output_array_field_6": 0.0,
+            "output_array_field_7": 0
+        },
+        {
+            "output_array_field_1": 1,
+            "output_array_field_2": 10.0,
+            "output_array_field_3": 20.0,
+            "output_array_field_4": 2,
+            "output_array_field_5": 3,
+            "output_array_field_6": 30.0,
+            "output_array_field_7": 4
+        },
+        {
+            "output_array_field_1": 2,
+            "output_array_field_2": 20.0,
+            "output_array_field_3": 40.0,
+            "output_array_field_4": 4,
+            "output_array_field_5": 6,
+            "output_array_field_6": 60.0,
+            "output_array_field_7": 8
+        },
+        {
+            "output_array_field_1": 3,
+            "output_array_field_2": 30.0,
+            "output_array_field_3": 60.0,
+            "output_array_field_4": 6,
+            "output_array_field_5": 9,
+            "output_array_field_6": 90.0,
+            "output_array_field_7": 12
+        },
+        {
+            "output_array_field_1": 4,
+            "output_array_field_2": 40.0,
+            "output_array_field_3": 80.0,
+            "output_array_field_4": 8,
+            "output_array_field_5": 12,
+            "output_array_field_6": 120.0,
+            "output_array_field_7": 16
+        },
+        {
+            "output_array_field_1": 5,
+            "output_array_field_2": 50.0,
+            "output_array_field_3": 100.0,
+            "output_array_field_4": 10,
+            "output_array_field_5": 15,
+            "output_array_field_6": 150.0,
+            "output_array_field_7": 20
+        },
+        {
+            "output_array_field_1": 6,
+            "output_array_field_2": 60.0,
+            "output_array_field_3": 120.0,
+            "output_array_field_4": 12,
+            "output_array_field_5": 18,
+            "output_array_field_6": 180.0,
+            "output_array_field_7": 24
+        }
+    ],
     "output_summary": "Sending Flight CMD: CMD-1234 and Sim CMD: SIM-5678 at 2025-302T13:17:34.053\nQuerying Flight Channel:FC-0010 Sim Channel:SC-0010 (EVRs:EVR_FLIGHT_1, EVR_SIM_1) - Value:0\nQuerying Flight Channel:FC-0020 Sim Channel:SC-0020 (EVRs:EVR_FLIGHT_2, EVR_SIM_2) - Value:1\nGenerated: sample_file.txt,sample_file.txt"
 }
