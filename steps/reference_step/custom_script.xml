@@ -245,19 +245,19 @@
                     </layout_field>
                     <image_display field_name="image_output_1">
                         <label label_content="Image Output" label_loc="TOP" label_align="CENTER"></label>
-                        <layout row="2" column="1" width="6" height="6" align="CENTER"></layout>
+                        <layout row="2" column="1" width="6" height="4" align="CENTER"></layout>
                     </image_display>
                     <series field_name="series_output_1">
                         <label label_content="Chart Output" label_loc="TOP" label_align="CENTER"></label>
-                        <layout row="2" column="7" width="6" height="6" align="CENTER"></layout>
+                        <layout row="2" column="7" width="6" height="4" align="CENTER"></layout>
                     </series>
                     <series field_name="series_output_2">
                         <label label_content="Chart Output" label_loc="TOP" label_align="CENTER"></label>
-                        <layout row="8" column="1" width="6" height="6" align="CENTER"></layout>
+                        <layout row="8" column="1" width="6" height="4" align="CENTER"></layout>
                     </series>
                     <image_display field_name="image_output_2">
                         <label label_content="Image Output" label_loc="TOP" label_align="CENTER"></label>
-                        <layout row="8" column="7" width="6" height="6" align="CENTER"></layout>
+                        <layout row="8" column="7" width="6" height="4" align="CENTER"></layout>
                     </image_display>
 
                     <table table_name="my_output_array">
