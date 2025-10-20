@@ -63,6 +63,8 @@ def plot_series(series: dict, output_dir: str, png_name: str):
         """Return a ``datetime`` or ``None``."""
         if isinstance(ts, datetime):
             return ts
+        if isinstance(ts, (int,float)):
+            return ts
         try:
             ts_str = str(ts).strip().rstrip('Z')
             return datetime.strptime(ts_str, "%Y-%jT%H:%M:%S.%f")
@@ -82,8 +84,8 @@ def plot_series(series: dict, output_dir: str, png_name: str):
     # X‑axis label
     timetype = series.get("timetype", "Time")
     ax.set_xlabel(timetype)
-    ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%jT%H:%M:%S.%f"))
 
+    x_is_time_type = False
     plotted_any = False   # <-- will stay False if no channel has valid points
 
   # ------------------------------------------------------------------
@@ -103,6 +105,9 @@ def plot_series(series: dict, output_dir: str, png_name: str):
                 x = _parse_timestamp(ts_raw)
                 if x is None:
                     continue
+                
+                if isinstance(x, datetime):
+                    x_is_time_type = True
 
                 # Draw the vertical dashed line
                 ax.axvline(x=x, color=colour, linestyle="--", linewidth=1.0)
@@ -129,6 +134,10 @@ def plot_series(series: dict, output_dir: str, png_name: str):
             if x is None:
                 continue
             timestamps.append(x)
+
+            if isinstance(x,datetime):
+                x_is_time_type = True
+
             try:
                 values.append(float(val))
             except Exception:
@@ -154,13 +163,22 @@ def plot_series(series: dict, output_dir: str, png_name: str):
         ax.set_title(f"Telemetry – DN vs. {timetype}")
         ax.grid(True, which="both", ls="--", lw=0.5, alpha=0.7)
         ax.legend(loc="best", fontsize="small")
-        fig.autofmt_xdate()
-        plt.tight_layout()
+        
+
+        if x_is_time_type:
+            ax.xaxis_date()
+            ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%jT%H:%M:%S.%f"))
+            fig.autofmt_xdate()
+        else:
+            import matplotlib.ticker as mticker
+            ax.xaxis.set_major_formatter(mticker.FormatStrFormatter('%.2f'))
     else:
         # No data – create a placeholder figure
         ax.set_title("No valid telemetry data to display")
         ax.axis("off")
         plt.axis('off')  # hide axes
+    
+    plt.tight_layout()
 
     # ------------------------------------------------------------------
     #   Save the PNG
@@ -294,7 +312,7 @@ if __name__ == '__main__':
 
     # Build a series
     series = {}
-    series['series_output_1'] = {'timetype': 'Earth Return Time',
+    series['series_output_1'] = {'timetype': 'SCLK',
                                 'series': [
                                             {
                                             'name': 'Voltage (V)',
@@ -311,17 +329,19 @@ if __name__ == '__main__':
 
                                         ]
                                 }
+    start_time_seconds = start_time.timestamp()
+
     for s in series['series_output_1']['series']:
         for i in range(random.randint(8,20)):
-            time = start_time + timedelta(seconds=i*random.randint(1,10))
+            time = start_time_seconds + i*random.uniform(1,10)
             value = random.randrange(3,14)
-            s['data'].append((time.strftime('%Y-%jT%H:%M:%S.%f'),value))
+            s['data'].append((time,value))
 
       
-        s['data'].sort(key=lambda pt: datetime.strptime(pt[0], '%Y-%jT%H:%M:%S.%f'))
+        s['data'].sort(key=lambda pt:pt[0])
 
-    event_time_1 = start_time + timedelta(seconds=i*random.randint(1,10))
-    event_time_2 = event_time_1 + timedelta(seconds=i * random.randint(1, 10))
+    event_time_1 = start_time_seconds + i*random.uniform(1,10)
+    event_time_2 = event_time_1 + i * random.uniform(1, 10)
 
     event = {
             'name': 'Event',
@@ -329,8 +349,8 @@ if __name__ == '__main__':
             'color': '#FF0000',
             'data': []
             }
-    event['data'].append((event_time_1.strftime('%Y-%jT%H:%M:%S.%f'),"TURN_ON"))
-    event['data'].append((event_time_2.strftime('%Y-%jT%H:%M:%S.%f'), "TURN_OFF"))
+    event['data'].append((event_time_1,"TURN_ON"))
+    event['data'].append((event_time_2, "TURN_OFF"))
 
     series['series_output_1']['series'].append(event)
 
