@@ -37,6 +37,21 @@
                 {
                     "entry_output_array_field_1": "1",
                     "entry_output_array_field_2": "10"
+<<<<<<< HEAD
+=======
+                },
+                {
+                    "entry_output_array_field_1": "2",
+                    "entry_output_array_field_2": "20"
+                },
+                {
+                    "entry_output_array_field_1": "3",
+                    "entry_output_array_field_2": "30"
+                },
+                {
+                    "entry_output_array_field_1": "4",
+                    "entry_output_array_field_2": "40"
+>>>>>>> 8bedf40 (added sclk)
                 }
             ]
         },

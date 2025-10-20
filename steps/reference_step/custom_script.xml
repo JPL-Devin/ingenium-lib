@@ -31,7 +31,7 @@
         
         <!--' An execution phase input can not be populated ahead of time, and the contents are not under CM/Redline/Blueline'-->
         <!--' Note that the precense of an execution phase input will make automatic execution of the step halt.'-->
-        <input_field name="measured_volts" description="Measured Volts" phase="EXECUTION" required="NO" type="FLOAT" default_value="60"></input_field>
+        <input_field name="measured_volts" description="Measured Volts" phase="AUTHORING" required="NO" type="FLOAT" default_value="60"></input_field>
         
         <!--' Strings capture a plain text string. Often used to specify a file path on the agent computer '-->
         <input_field name="file_loc" description="Full path to target file" phase="AUTHORING" required="NO" type="STRING" default_value="/home/user/file.txt"></input_field>     
@@ -123,23 +123,13 @@
             <section>
                 <section_header>
                     <layout_display>
-                        <template template="Sending Commands and Files"></template>
-                        <layout row="1" column="1" width="4" height="1" align="LEFT"></layout>
-                    </layout_display>
-                    <layout_display>
-                        <template template="at {start_time}"></template>
+                        <template template="Sending Commands and Files at {start_time} and then querying for results."></template>
                         <mouseover_display>
                             <mouseover_element field_name="start_time_date_time" display_name="Start Time"></mouseover_element>
-                        </mouseover_display>
-                        <layout row="1" column="4" width="2" height="1" align="LEFT"></layout>
-                    </layout_display>
-                    <layout_display>
-                        <template template="and then querying for results."></template>
-                        <mouseover_display>
                             <mouseover_element field_name="query_start" display_name="Query Start"></mouseover_element>
                             <mouseover_element field_name="query_end" display_name="Query End"></mouseover_element>
                         </mouseover_display>
-                        <layout row="1" column="6" width="4" height="1" align="LEFT"></layout>
+                        <layout row="1" column="1" width="8" height="1" align="LEFT"></layout>
                     </layout_display>
                     <layout_field field_name="measured_volts">
                         <label label_content="Volts" label_loc="LEFT" label_align="CENTER"></label>
