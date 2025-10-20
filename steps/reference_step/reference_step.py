@@ -1,4 +1,4 @@
-
+#!/home/swanchr/ing-venv/bin/python3
 '''
 This is reference Ingenium Custom Script it intended as a demo of the capabilities in a custom script
  and as a template to follow for implementation.
@@ -250,7 +250,7 @@ if __name__ == '__main__':
     '''
 
     # Convert the start_time to a datetime object
-    start_time = datetime.strptime(inputs['start_time'], '%Y-%jT%H:%M:%S.%f')
+    start_time = datetime.strptime(inputs['start_time'], '%Y-%jT%H:%M:%S')
     
     # Compute the query range
     query_start = start_time - timedelta(seconds=inputs['lookback'])
@@ -277,8 +277,7 @@ if __name__ == '__main__':
         
         write_output_file(output_dict, output_file_abs_path)
         logger.info(f'Entry was added: {i}')
-            
-        time.sleep(1)
+
 
     # Populate my_output_array (top‑level) with the defined fields
     for i in range(random.randint(2,15)):
