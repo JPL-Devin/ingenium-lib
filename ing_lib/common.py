@@ -262,7 +262,7 @@ def generate_token(private_pem, username=None, scopes=None, force=False):
 def authenticate(server, username=None, password=None, force=False, rsa=False):
     """
     This function attempts to login to the specified Ingenium server using the current user (and prompting for their
-     password). If successful it stores the JWT in a global. If token already exists, it will keep the token unless
+     password). If successful it stores the JWT in a dictionary. If token already exists, it will keep the token unless
      force if True.
 
     Parameters
@@ -287,7 +287,7 @@ def authenticate(server, username=None, password=None, force=False, rsa=False):
 
     """
 
-    if _store['token'] is not None and not force:
+    if get_token() is not None and not force:
         return True
 
     if not username:
@@ -326,7 +326,7 @@ def authenticate(server, username=None, password=None, force=False, rsa=False):
 
         #_token = f"Bearer {json.loads(logon.text)['access_token']}"
         #_refresh_time = datetime.datetime.utcnow()
-        msg = f"Successful login to {server} as {username} with token: {_store['token'] }"
+        msg = f"Successful login to {server} as {username} with token: {get_token()}"
         logger.debug(msg)
         return True
     else:
@@ -352,13 +352,13 @@ def refresh_auth(server, force=False):
 
     """
 
-    token_time_remaining = (datetime.datetime.utcnow() - _store['refresh_time'] ).total_seconds()
+    token_time_remaining = (datetime.datetime.utcnow() - get_refresh_time()).total_seconds()
 
     if force or _stale_token():
         logger.debug('Forced refresh of token.')
         renew_header = {
             'Content-Type': 'application/json',
-            'Authorization': _store['token']
+            'Authorization': get_token()
         }
 
         try:
@@ -389,15 +389,15 @@ def refresh_auth(server, force=False):
 
 
 def get_token():
-    return _store['token']
+    return _store.get('token')
 
 
 def get_refresh_time():
-    return _store['refresh_time']
+    return _store.get('refresh_time')
 
 
 def get_ssl_verify():
-    return _store['ssl_verify']
+    return _store.get('ssl_verify')
 
 
 def _auth_header():
@@ -409,9 +409,9 @@ def _auth_header():
 
 def _stale_token():
     token = get_token()
-    if token is None or _store['refresh_time'] is None:
+    if token is None or get_refresh_time() is None:
         return True
-    elapsed = (datetime.datetime.utcnow() - _store['refresh_time']).total_seconds()
+    elapsed = (datetime.datetime.utcnow() - get_refresh_time()).total_seconds()
     return elapsed > _TOKEN_REFRESH_DURATION
 
 
