@@ -79,7 +79,7 @@ def response_handler(response):
     return response_ok
 
 
-def ingenium_rest_get(endpoint):
+def ingenium_rest_get(endpoint, query_params={}):
     """
     This function encapsulates the restful get requests to the Ingenium servers
 
@@ -87,6 +87,9 @@ def ingenium_rest_get(endpoint):
     ----------
     endpoint
         The REST endpoint to hit
+
+    query_params
+        If there are already query parameters as part of this request
 
     Returns
     -------
@@ -99,7 +102,7 @@ def ingenium_rest_get(endpoint):
 
     data = None
 
-    data_req = requests.get(endpoint, headers=_auth_header(), verify=get_ssl_verify())
+    data_req = requests.get(endpoint, headers=_auth_header(), verify=get_ssl_verify(), params=query_params)
 
     if response_handler(data_req):
         data = data_req.json()
