@@ -19,7 +19,7 @@ init_console_logger()
 import common
 from project_config import get_custom_scripts, create_custom_script, update_custom_script
 from project_config import get_built_in_palette, get_custom_palette
-from project_config import update_built_in_palette, create_custom_palette, update_custom_palette
+from project_config import update_built_in_palette, create_custom_palette, update_custom_palette, delete_custom_palette
 import argparse
 import getpass
 import urllib3
@@ -55,8 +55,8 @@ def get_input(args=[]):
 
     parser.add_argument('server', type=str,
                         help='Full Path to Ingenium Server (e.g. https://ingenium-sample_project.jpl.nasa.gov)')
-    parser.add_argument('function', type=str, choices=['query', 'diff', 'update'],
-                        help='Function to perform. Can be one of: query, diff, update.')
+    parser.add_argument('function', type=str, choices=['query', 'diff', 'update', 'delete'],
+                        help='Function to perform. Can be one of: query, diff, update, delete.')
     parser.add_argument('excel', type=str,
                         help='Path to the Excel file to use for diff or update.')
     parser.add_argument('--debug', action='store_true', help='Enables debug logging.')
@@ -67,6 +67,8 @@ def get_input(args=[]):
                         help='Path to the SSL CA bundle. If provided, this will override ignore_ssl_error.')
     parser.add_argument('--rsa', action='store_true',
                         help='Uses RSA Two Factor Authentication (username/passcode) to authenticate.')
+    parser.add_argument('--confirm', action='store_true',
+                        help='Automatically confirm all actions without prompting user.')
 
 
     if len(args) > 0:
@@ -443,7 +445,7 @@ def diff_palette_info(current_palette, excel_palette):
         logger.error(msg)
         raise common.IngeniumLibError(msg)
 
-def update_palette_info(server, excel_palette):
+def update_palette_info(server, current_palette, excel_palette, confirm=False):
     """
     This function updates the Ingenium server with palette information from Excel data
 
@@ -451,15 +453,47 @@ def update_palette_info(server, excel_palette):
     ----------
     server : str
         Ingenium Server (e.g. https://ingenium-sample_project.jpl.nasa.gov) without a trailing slash
+
+    current_palette : dict
+        Dictionary containing built-in and custom palette information from server
+
     excel_palette : dict
         Dictionary containing built-in and custom palette information from Excel file
+    
+    confirm : bool
+        If True, automatically confirm all updates without prompting user
     """
     logger.info("Updating server palette with Excel data")
     
     try:
-        # Get current server palette for comparison
-        current_palette = get_palette_info(server)
+        # Show summary of changes before proceeding
+        logger.info("=== Update Summary ===")
         
+        # Count potential changes
+        excel_built_in = excel_palette.get('built_in', [])
+        current_built_in = current_palette.get('built_in', [])
+        excel_custom = excel_palette.get('custom', [])
+        current_custom = current_palette.get('custom', [])
+        
+        logger.info(f"Built-in steps in Excel: {len(excel_built_in)}")
+        logger.info(f"Built-in steps on server: {len(current_built_in)}")
+        logger.info(f"Custom steps in Excel: {len(excel_custom)}")
+        logger.info(f"Custom steps on server: {len(current_custom)}")
+        
+        if not confirm:
+            # Ask for user confirmation before proceeding
+            while True:
+                response = input(f"\nDo you want to proceed with updating the server palette? (y/n): ").strip().lower()
+                if response in ['y', 'yes']:
+                    break
+                elif response in ['n', 'no']:
+                    logger.info("Update cancelled by user")
+                    return
+                else:
+                    print("Please enter 'y' or 'n'")
+        else:
+            logger.info("Auto-confirmation enabled, proceeding with updates")
+
         # Update built-in steps
         excel_built_in = excel_palette.get('built_in', [])
         current_built_in = current_palette.get('built_in', [])
@@ -548,13 +582,6 @@ def update_palette_info(server, excel_palette):
                             existing_step = current_step
                             break
                 
-                if not existing_step and display_name:
-                    # Try to find by display_name
-                    for current_step in current_custom:
-                        if isinstance(current_step, dict) and current_step.get('step_display_name') == display_name:
-                            existing_step = current_step
-                            break
-                
                 if existing_step:
                     # Check for differences in existing custom step
                     differences = {}
@@ -631,6 +658,121 @@ def update_palette_info(server, excel_palette):
         logger.error(msg)
         raise common.IngeniumLibError(msg)
 
+def delete_custom_steps(server, current_palette, excel_palette, confirm=False):
+    """
+    This function deletes custom steps from the Ingenium server based on Excel data with user confirmation
+
+    Parameters
+    ----------
+    server : str
+        Ingenium Server (e.g. https://ingenium-sample_project.jpl.nasa.gov) without a trailing slash
+
+    current_palette : dict
+        Dictionary containing custom palette information from server to delete
+
+    excel_palette : dict
+        Dictionary containing custom palette information from Excel file to delete
+    
+    confirm : bool
+        If True, automatically confirm all deletions without prompting user
+    """
+    logger.info("Processing custom step deletions from Excel data")
+    
+    try:
+        current_custom = current_palette.get('custom', [])
+        
+        # Create current custom steps dictionary for lookup
+        current_custom_dict = {}
+        for step in current_custom:
+            if isinstance(step, dict) and step.get('step_id'):
+                current_custom_dict[step['step_id']] = step
+        
+        excel_custom = excel_palette.get('custom', [])
+        
+        if not excel_custom:
+            logger.info("No custom steps found in Excel file to delete")
+            return
+        
+        logger.info("=== Custom Steps Deletion ===")
+        logger.info(f"Found {len(excel_custom)} custom steps in Excel file for deletion")
+        
+        # Process each custom step from Excel for deletion
+        deletions_confirmed = 0
+        deletions_skipped = 0
+        deletions_failed = 0
+        
+        for excel_step in excel_custom:
+            if isinstance(excel_step, dict):
+                step_id = excel_step.get('step_id')
+                display_name = excel_step.get('step_display_name', 'Unknown')
+                
+                if not step_id:
+                    logger.warning(f"Skipping custom step deletion - missing step_id: {display_name}")
+                    deletions_skipped += 1
+                    continue
+                
+                # Check if step exists on server
+                if step_id not in current_custom_dict:
+                    logger.warning(f"Custom step '{display_name}' ({step_id}) not found on server, skipping")
+                    deletions_skipped += 1
+                    continue
+                
+                existing_step = current_custom_dict[step_id]
+                
+                # Display step information and ask for confirmation
+                logger.info(f"\nCustom step found for deletion:")
+                logger.info(f"  Step ID: {step_id}")
+                logger.info(f"  Display Name: {display_name}")
+                logger.info(f"  Palette Category: {existing_step.get('palette_category', 'N/A')}")
+                
+                # Prompt user for confirmation unless auto-confirm is enabled
+                confirmed = False
+                if confirm:
+                    confirmed = True
+                    logger.info(f"Auto-confirmation enabled, deleting custom step: {display_name} ({step_id})")
+                else:
+                    while True:
+                        response = input(f"\nDo you want to delete custom step '{display_name}' ({step_id})? (y/n): ").strip().lower()
+                        if response in ['y', 'yes']:
+                            confirmed = True
+                            break
+                        elif response in ['n', 'no']:
+                            confirmed = False
+                            break
+                        else:
+                            print("Please enter 'y' or 'n'")
+                
+                if confirmed:
+                    try:
+                        delete_custom_palette(server, step_id)
+                        logger.info(f"Successfully deleted custom step: {display_name} ({step_id})")
+                        deletions_confirmed += 1
+                    except Exception as e:
+                        logger.error(f"Failed to delete custom step {display_name} ({step_id}): {e}")
+                        deletions_failed += 1
+                else:
+                    logger.info(f"Deletion cancelled by user for custom step: {display_name} ({step_id})")
+                    deletions_skipped += 1
+        
+        # Summary
+        logger.info(f"\n=== Deletion Summary ===")
+        logger.info(f"Total steps processed: {len(excel_custom)}")
+        logger.info(f"Steps deleted: {deletions_confirmed}")
+        logger.info(f"Steps skipped: {deletions_skipped}")
+        logger.info(f"Deletions failed: {deletions_failed}")
+        
+        if deletions_confirmed > 0:
+            logger.info("Custom step deletion completed successfully")
+        elif deletions_skipped > 0:
+            logger.info("No custom steps were deleted (all skipped or cancelled)")
+        else:
+            logger.info("No custom steps found to process")
+        
+    except Exception as e:
+        msg = f"Error deleting custom steps: {e}"
+        logger.error(msg)
+        raise common.IngeniumLibError(msg)
+
 
 ##################################################### Main ###########################################################
 def main(args=[]):
@@ -694,7 +836,7 @@ def main(args=[]):
         write_palette_excel(inputs.excel, current_palette)
 
     # If the function is diff or update, read the Excel File Contents
-    if inputs.function in ['diff', 'update']:
+    if inputs.function in ['diff', 'update', 'delete']:
 
         # Read the Excel File Contents
         excel_palette = read_palette_excel(inputs.excel)
@@ -702,7 +844,9 @@ def main(args=[]):
         if inputs.function in ['diff']:
             diff_palette_info(current_palette, excel_palette)
         elif inputs.function in ['update']:
-            update_palette_info(inputs.server, excel_palette)
+            update_palette_info(inputs.server, current_palette, excel_palette, inputs.confirm)
+        elif inputs.function in ['delete']:
+            delete_custom_steps(inputs.server, current_palette, excel_palette, inputs.confirm)
 
     logger.info("Step Palette processing completed successfully")
 
