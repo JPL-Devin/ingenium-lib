@@ -274,10 +274,141 @@ class TestProjConfigPalette:
         ProjConfigPalette.diff_palette_info(current_palette, excel_palette)
 
     @patch('ProjConfigPalette.update_built_in_palette')
+    @patch('ProjConfigPalette.diff_palette_info')
+    @patch('builtins.input')
+    def test_update_palette_info_shows_diff_before_confirmation(self, mock_input, mock_diff, mock_update_builtin):
+        """Test that update_palette_info calls diff_palette_info before asking for confirmation."""
+        mock_input.return_value = 'y'
+        mock_update_builtin.return_value = {'success': True}
+        
+        current_palette = {
+            'built_in': [
+                {
+                    'step_type': 'MANUAL_INPUT',
+                    'step_display_name': 'Manual Input',
+                    'palette_category': 'Input',
+                    'enable_disable': 'enable'
+                }
+            ],
+            'custom': []
+        }
+        
+        excel_palette = {
+            'built_in': [
+                {
+                    'step_type': 'MANUAL_INPUT',
+                    'step_display_name': 'Updated Manual Input',  # Different
+                    'palette_category': 'Input',
+                    'enable_disable': 'enable'
+                }
+            ],
+            'custom': []
+        }
+        
+        ProjConfigPalette.update_palette_info(
+            'https://test-server.example.com',
+            current_palette,
+            excel_palette,
+            confirm=False
+        )
+        
+        # Verify diff_palette_info was called before asking for confirmation
+        mock_diff.assert_called_once_with(current_palette, excel_palette)
+        mock_input.assert_called()
+        mock_update_builtin.assert_called_once()
+
+    @patch('ProjConfigPalette.update_built_in_palette')
+    @patch('ProjConfigPalette.diff_palette_info')
+    @patch('builtins.input')
+    def test_update_palette_info_with_auto_confirm(self, mock_input, mock_diff, mock_update_builtin):
+        """Test that update_palette_info shows diff but skips confirmation with --confirm flag."""
+        mock_update_builtin.return_value = {'success': True}
+        
+        current_palette = {
+            'built_in': [
+                {
+                    'step_type': 'MANUAL_INPUT',
+                    'step_display_name': 'Manual Input',
+                    'palette_category': 'Input',
+                    'enable_disable': 'enable'
+                }
+            ],
+            'custom': []
+        }
+        
+        excel_palette = {
+            'built_in': [
+                {
+                    'step_type': 'MANUAL_INPUT',
+                    'step_display_name': 'Updated Manual Input',  # Different
+                    'palette_category': 'Input',
+                    'enable_disable': 'enable'
+                }
+            ],
+            'custom': []
+        }
+        
+        ProjConfigPalette.update_palette_info(
+            'https://test-server.example.com',
+            current_palette,
+            excel_palette,
+            confirm=True  # Auto-confirm enabled
+        )
+        
+        # Verify diff_palette_info was called but input was not
+        mock_diff.assert_called_once_with(current_palette, excel_palette)
+        mock_input.assert_not_called()  # Should not ask for confirmation
+        mock_update_builtin.assert_called_once()
+
+    @patch('ProjConfigPalette.update_built_in_palette')
+    @patch('ProjConfigPalette.diff_palette_info')
+    @patch('builtins.input')
+    def test_update_palette_info_cancelled_after_diff(self, mock_input, mock_diff, mock_update_builtin):
+        """Test that update_palette_info shows diff and allows cancellation."""
+        mock_input.return_value = 'n'  # User cancels
+        
+        current_palette = {
+            'built_in': [
+                {
+                    'step_type': 'MANUAL_INPUT',
+                    'step_display_name': 'Manual Input',
+                    'palette_category': 'Input',
+                    'enable_disable': 'enable'
+                }
+            ],
+            'custom': []
+        }
+        
+        excel_palette = {
+            'built_in': [
+                {
+                    'step_type': 'MANUAL_INPUT',
+                    'step_display_name': 'Updated Manual Input',  # Different
+                    'palette_category': 'Input',
+                    'enable_disable': 'enable'
+                }
+            ],
+            'custom': []
+        }
+        
+        ProjConfigPalette.update_palette_info(
+            'https://test-server.example.com',
+            current_palette,
+            excel_palette,
+            confirm=False
+        )
+        
+        # Verify diff was shown but no updates were performed
+        mock_diff.assert_called_once_with(current_palette, excel_palette)
+        mock_input.assert_called_once()
+        mock_update_builtin.assert_not_called()
+
+    @patch('ProjConfigPalette.update_built_in_palette')
     @patch('ProjConfigPalette.update_custom_palette')
     @patch('ProjConfigPalette.create_custom_palette')
+    @patch('ProjConfigPalette.diff_palette_info')
     @patch('builtins.input')
-    def test_update_palette_info_with_confirmation(self, mock_input, mock_create, mock_update_custom, mock_update_builtin):
+    def test_update_palette_info_with_confirmation(self, mock_input, mock_diff, mock_create, mock_update_custom, mock_update_builtin):
         """Test updating palette info with user confirmation."""
         mock_input.return_value = 'y'
         mock_update_builtin.return_value = {'success': True}
@@ -315,12 +446,15 @@ class TestProjConfigPalette:
             confirm=False
         )
         
+        # Verify diff_palette_info was called before asking for confirmation
+        mock_diff.assert_called_once_with(current_palette, excel_palette)
         mock_update_builtin.assert_called_once()
         mock_input.assert_called()
 
     @patch('ProjConfigPalette.update_built_in_palette')
+    @patch('ProjConfigPalette.diff_palette_info')
     @patch('builtins.input')
-    def test_update_palette_info_cancelled(self, mock_input, mock_update_builtin):
+    def test_update_palette_info_cancelled(self, mock_input, mock_diff, mock_update_builtin):
         """Test updating palette info when user cancels."""
         mock_input.return_value = 'n'
         
@@ -334,6 +468,9 @@ class TestProjConfigPalette:
             confirm=False
         )
         
+        # Verify diff was shown but no updates were performed
+        mock_diff.assert_called_once_with(current_palette, excel_palette)
+        mock_input.assert_called()
         mock_update_builtin.assert_not_called()
 
     @patch('ProjConfigPalette.delete_custom_palette')
@@ -795,8 +932,9 @@ class TestProjConfigPalette:
     @patch('ProjConfigPalette.update_built_in_palette')
     @patch('ProjConfigPalette.update_custom_palette')
     @patch('ProjConfigPalette.create_custom_palette')
+    @patch('ProjConfigPalette.diff_palette_info')
     @patch('builtins.input')
-    def test_update_palette_info_create_new_custom_step(self, mock_input, mock_create, mock_update_custom, mock_update_builtin):
+    def test_update_palette_info_create_new_custom_step(self, mock_input, mock_diff, mock_create, mock_update_custom, mock_update_builtin):
         """Test updating palette info by creating new custom step."""
         mock_input.return_value = 'y'
         mock_update_builtin.return_value = {'success': True}
@@ -814,7 +952,9 @@ class TestProjConfigPalette:
                 {
                     'step_id': 'new_custom_step',
                     'step_display_name': 'New Custom Step',
-                    'palette_category': 'Custom'
+                    'palette_category': 'Custom',
+                    'step_path': '/path/to/custom_step.py',
+                    'step_hash': 'abc123def456'
                 }
             ]
         }
@@ -830,8 +970,9 @@ class TestProjConfigPalette:
         mock_update_custom.assert_not_called()
 
     @patch('ProjConfigPalette.update_built_in_palette')
+    @patch('ProjConfigPalette.diff_palette_info')
     @patch('builtins.input')
-    def test_update_palette_info_built_in_step_not_found(self, mock_input, mock_update_builtin):
+    def test_update_palette_info_built_in_step_not_found(self, mock_input, mock_diff, mock_update_builtin):
         """Test updating palette info when built-in step not found on server."""
         mock_input.return_value = 'y'
         mock_update_builtin.return_value = {'success': True}
@@ -925,8 +1066,9 @@ class TestProjConfigPalette:
         mock_delete.assert_not_called()
 
     @patch('ProjConfigPalette.update_built_in_palette')
+    @patch('ProjConfigPalette.diff_palette_info')
     @patch('builtins.input')
-    def test_update_palette_info_built_in_update_failure(self, mock_input, mock_update_builtin):
+    def test_update_palette_info_built_in_update_failure(self, mock_input, mock_diff, mock_update_builtin):
         """Test updating palette info when built-in step update fails."""
         mock_input.return_value = 'y'
         mock_update_builtin.side_effect = Exception("Update failed")
@@ -966,8 +1108,9 @@ class TestProjConfigPalette:
         mock_update_builtin.assert_called_once()
 
     @patch('ProjConfigPalette.create_custom_palette')
+    @patch('ProjConfigPalette.diff_palette_info')
     @patch('builtins.input')
-    def test_update_palette_info_custom_step_creation_failure(self, mock_input, mock_create):
+    def test_update_palette_info_custom_step_creation_failure(self, mock_input, mock_diff, mock_create):
         """Test updating palette info when custom step creation fails."""
         mock_input.return_value = 'y'
         mock_create.side_effect = Exception("Creation failed")
@@ -983,7 +1126,9 @@ class TestProjConfigPalette:
                 {
                     'step_id': 'new_custom_step',
                     'step_display_name': 'New Custom Step',
-                    'palette_category': 'Custom'
+                    'palette_category': 'Custom',
+                    'step_path': '/path/to/custom_step.py',
+                    'step_hash': 'abc123def456'
                 }
             ]
         }
@@ -1080,8 +1225,9 @@ class TestProjConfigPalette:
         # Should handle empty data gracefully
         ProjConfigPalette.diff_palette_info(current_palette, excel_palette)
 
+    @patch('ProjConfigPalette.diff_palette_info')
     @patch('builtins.input')
-    def test_update_palette_info_no_steps_to_process(self, mock_input):
+    def test_update_palette_info_no_steps_to_process(self, mock_input, mock_diff):
         """Test updating palette info with no steps to process."""
         mock_input.return_value = 'y'
         

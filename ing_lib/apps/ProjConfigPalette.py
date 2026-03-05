@@ -281,7 +281,7 @@ def write_palette_excel(excel_path, palette_info):
                 logger.info(f"Wrote {len(custom_steps)} custom steps to Excel")
         else:
             # Write default headers even when no custom steps data provided
-            default_headers = ['step_id','palette_category', 'step_display_name']
+            default_headers = ['step_id','step_hash', 'step_path', 'palette_category', 'step_display_name']
             for col_idx, header in enumerate(default_headers, 1):
                 custom_ws.cell(row=1, column=col_idx, value=header)
             logger.info("Created custom steps worksheet with default headers")
@@ -411,7 +411,7 @@ def diff_palette_info(current_palette, excel_palette):
             excel_step = excel_custom_dict[key]
             
             # Compare key fields
-            fields_to_compare = ['display_name', 'palette_category', 'enable_disable', 'script_id']
+            fields_to_compare = ['step_display_name', 'palette_category', 'script_id', 'step_path', 'step_hash']
             for field in fields_to_compare:
                 if current_step.get(field) != excel_step.get(field):
                     custom_differences.append({
@@ -466,8 +466,10 @@ def update_palette_info(server, current_palette, excel_palette, confirm=False):
     logger.info("Updating server palette with Excel data")
     
     try:
-        # Show summary of changes before proceeding
+        # Show detailed differences before proceeding
         logger.info("=== Update Summary ===")
+        logger.info("Displaying differences between server and Excel data:")
+        diff_palette_info(current_palette, excel_palette)
         
         # Count potential changes
         excel_built_in = excel_palette.get('built_in', [])
@@ -475,6 +477,7 @@ def update_palette_info(server, current_palette, excel_palette, confirm=False):
         excel_custom = excel_palette.get('custom', [])
         current_custom = current_palette.get('custom', [])
         
+        logger.info(f"\nBasic counts:")
         logger.info(f"Built-in steps in Excel: {len(excel_built_in)}")
         logger.info(f"Built-in steps on server: {len(current_built_in)}")
         logger.info(f"Custom steps in Excel: {len(excel_custom)}")
@@ -585,7 +588,7 @@ def update_palette_info(server, current_palette, excel_palette, confirm=False):
                 if existing_step:
                     # Check for differences in existing custom step
                     differences = {}
-                    fields_to_check = ['step_display_name', 'palette_category', 'step_id']
+                    fields_to_check = ['step_display_name', 'palette_category', 'step_id', 'step_path', 'step_hash']
                     for field in fields_to_check:
                         if excel_step.get(field) != existing_step.get(field):
                             differences[field] = {
@@ -612,10 +615,10 @@ def update_palette_info(server, current_palette, excel_palette, confirm=False):
                         custom_skipped += 1
                 else:
                     # Create new custom step (always create new steps)
-                    required_fields = ['step_display_name', 'palette_category', 'step_id']
+                    required_fields = ['step_display_name', 'palette_category', 'step_id', 'step_path', 'step_hash']
                     if all(field in excel_step for field in required_fields):
                         create_content = {}
-                        fields_to_create = ['step_display_name', 'palette_category', 'step_id']
+                        fields_to_create = ['step_display_name', 'palette_category', 'step_id', 'step_path', 'step_hash']
                         for field in fields_to_create:
                             if field in excel_step:
                                 create_content[field] = excel_step[field]
