@@ -197,10 +197,10 @@ def generate_token(private_pem, username=None, scopes=None, force=False):
 
     """
 
-    current_time = datetime.datetime.utcnow()
+    current_time = datetime.datetime.now(datetime.UTC)
 
     if not _store.get('refresh_time'):
-        _refresh_time = datetime.datetime.utcnow() - datetime.timedelta(seconds=3600)
+        _refresh_time = datetime.datetime.now(datetime.UTC) - datetime.timedelta(seconds=3600)
 
     # Check how much time is remaining on the current token
     token_time = (current_time - _store.get('refresh_time')).total_seconds()
@@ -327,8 +327,6 @@ def authenticate(server, username=None, password=None, force=False, rsa=False):
         set_token(f"Bearer {json.loads(logon.text)['access_token']}")
         set_refresh_time(datetime.datetime.now(datetime.UTC))
 
-        #_token = f"Bearer {json.loads(logon.text)['access_token']}"
-        #_refresh_time = datetime.datetime.utcnow()
         msg = f"Successful login to {server} as {username} with token: {get_token()}"
         logger.debug(msg)
         return True
@@ -355,7 +353,11 @@ def refresh_auth(server, force=False):
 
     """
 
-    token_time_remaining = (datetime.datetime.utcnow() - get_refresh_time()).total_seconds()
+    refresh_time = get_refresh_time()
+    if refresh_time is None:
+        token_time_remaining = 0  # Force refresh if no refresh time stored
+    else:
+        token_time_remaining = (datetime.datetime.now(datetime.UTC) - refresh_time).total_seconds()
 
     if force or _stale_token():
         logger.debug('Forced refresh of token.')
@@ -414,7 +416,7 @@ def _stale_token():
     token = get_token()
     if token is None or get_refresh_time() is None:
         return True
-    elapsed = (datetime.datetime.utcnow() - get_refresh_time()).total_seconds()
+    elapsed = (datetime.datetime.now(datetime.UTC) - get_refresh_time()).total_seconds()
     return elapsed > _TOKEN_REFRESH_DURATION
 
 
