@@ -98,7 +98,7 @@ def ingenium_rest_get(endpoint, query_params={}):
 
     # If needed, refresh the token
     if _stale_token():
-        refresh_endpoint(_extact_server(endpoint), False)
+        refresh_auth(_extact_server(endpoint), False)
 
     data = None
 
@@ -133,7 +133,7 @@ def ingenium_rest_get_paginated(endpoint, query_params={}):
 
     # If needed, refresh the token
     if _stale_token():
-        refresh_endpoint(_extact_server(endpoint), False)
+        refresh_auth(_extact_server(endpoint), False)
 
     _INITIAL_LIMIT = 1000
     _INITIAL_OFFSET = 0
@@ -253,8 +253,8 @@ def generate_token(private_pem, username=None, scopes=None, force=False):
         logger.debug(msg)
 
         # Update the globals
-        _store['token'] = f'Bearer {token_str}'
-        _store['refresh_time'] = current_time
+        set_token(f'Bearer {token_str}')
+        set_refresh_time(current_time)
 
     # Other wise
     else:
@@ -324,8 +324,8 @@ def authenticate(server, username=None, password=None, force=False, rsa=False):
         return False
 
     if response_handler(logon):
-        _store['token'] = f"Bearer {json.loads(logon.text)['access_token']}"
-        _store['refresh_time'] = datetime.datetime.utcnow()
+        set_token(f"Bearer {json.loads(logon.text)['access_token']}")
+        set_refresh_time(datetime.datetime.now(datetime.UTC))
 
         #_token = f"Bearer {json.loads(logon.text)['access_token']}"
         #_refresh_time = datetime.datetime.utcnow()
@@ -361,7 +361,7 @@ def refresh_auth(server, force=False):
         logger.debug('Forced refresh of token.')
         renew_header = {
             'Content-Type': 'application/json',
-            'Authorization': get_token()
+            'Authorization': _store.get('token')
         }
 
         try:
@@ -375,11 +375,11 @@ def refresh_auth(server, force=False):
             
 
         if response_handler(refresh):
-            _store['token'] = f"Bearer {json.loads(logon.text)['access_token']}"
-            _store['refresh_time'] = datetime.datetime.utcnow()
+            set_token(f"Bearer {json.loads(refresh.text)['access_token']}")
+            set_refresh_time(datetime.datetime.now(datetime.UTC))
             msg = f"Successfully refreshed token with: {server}"
             logger.debug(msg)
-            return 
+            return True
         else:
             msg = "Failed to refresh token."
             logger.error(msg)
@@ -388,7 +388,7 @@ def refresh_auth(server, force=False):
     else:
         msg = f"Time remaining on token: {token_time_remaining} seconds is less than limit: {_TOKEN_REFRESH_DURATION}. No refresh needed."
         logger.debug(msg)
-        return 
+        return True 
 
 
 def get_token():
@@ -421,3 +421,17 @@ def _stale_token():
 def _extact_server(endpoint):
     parsed = urlparse(endpoint)
     return f'{parsed.scheme}://{parsed.netloc}'
+
+def set_token(value):
+    """Set the token value."""
+    _store['token'] = value
+
+
+def set_refresh_time(value):
+    """Set the refresh time value."""
+    _store['refresh_time'] = value
+
+
+def set_ssl_verify(value):
+    """Set the ssl verify value."""
+    _store['ssl_verify'] = value
