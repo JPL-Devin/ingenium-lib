@@ -470,6 +470,7 @@ class TestProjConfigCreateUpdateCS:
             'script_name': 'valid_script',
             'script_path': 'scripts/valid_script.sh',
             'description': 'Valid test script',
+            'is_command': 'false',
             'script_id': generate_script_id('scripts/valid_script.sh')
         }
         
@@ -547,6 +548,7 @@ class TestProjConfigCreateUpdateCS:
                 'script_path': 'test_script.sh',
                 'description': 'Test script',
                 'script_id': existing_script_id,
+                'is_command': 'false',
                 'hash': 'a'*64,  # Valid SHA256 hash format
                 'inputs': [],
                 'outputs': []
