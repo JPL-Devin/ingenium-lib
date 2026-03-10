@@ -14,7 +14,7 @@ import common
 class TestProjectConfig:
     """Test class for project_config module functionality."""
     
-    @patch('common.ingenium_rest_get_paginated')
+    @patch('project_config.ingenium_rest_get_paginated')
     def test_get_dictionary_versions(self, mock_get_paginated):
         """Test get_dictionary_versions function."""
         mock_get_paginated.return_value = [
@@ -66,7 +66,7 @@ class TestProjectConfig:
                     'https://test-server.example.com', 'flight', 'v1.0'
                 )
 
-    @patch('common.ingenium_rest_get_paginated')
+    @patch('project_config.ingenium_rest_get_paginated')
     def test_get_dictionary(self, mock_get_paginated):
         """Test get_dictionary function."""
         mock_get_paginated.return_value = [
@@ -98,7 +98,7 @@ class TestProjectConfig:
         
         # Test that logger is properly configured
         assert hasattr(project_config, 'logger')
-        assert project_config.logger.name == 'project_config'
+        assert project_config.logger.name == 'ingenium.project_config'
 
     @patch('project_config.ingenium_rest_get')
     def test_get_built_in_palette(self, mock_get):
