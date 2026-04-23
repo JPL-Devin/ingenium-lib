@@ -14,14 +14,13 @@ MOCK_SERVER = 'https://mock-ingenium.example.com'
 
 
 @pytest.fixture(autouse=True)
-def _set_venue_globals():
-    """venue.py uses bare `token` and `ssl_verify` globals imported via `from common import *`.
-    These names are NOT actually exported by common's star-import, so we set them directly."""
-    venue.token = 'Bearer test-tok'
-    venue.ssl_verify = True
+def _set_store():
+    """Set up common._store with a valid token and ssl_verify for venue functions."""
+    original = common._store.copy()
+    common._store['token'] = 'Bearer test-tok'
+    common._store['ssl_verify'] = True
     yield
-    del venue.token
-    del venue.ssl_verify
+    common._store.update(original)
 
 
 class TestCreateVenueGroup:

@@ -438,11 +438,9 @@ class TestRefreshAuth:
         resp = MagicMock(status_code=200, text='{"access_token": "refreshed"}')
         mock_post.return_value = resp
 
-        try:
-            common.refresh_auth(MOCK_BASE_URL, force=True)
-        except NameError:
-            pass
+        common.refresh_auth(MOCK_BASE_URL, force=True)
         mock_post.assert_called_once()
+        assert common.get_token() == "Bearer refreshed"
         expected_url = f"{MOCK_BASE_URL}{common.refresh_endpoint}"
         assert mock_post.call_args[0][0] == expected_url
 
@@ -465,5 +463,5 @@ class TestRefreshAuth:
         resp.request.method = "POST"
         mock_post.return_value = resp
 
-        with pytest.raises((common.IngeniumLibError, NameError)):
-            common.refresh_auth(MOCK_BASE_URL, force=True)  
+        with pytest.raises(common.IngeniumLibError):
+            common.refresh_auth(MOCK_BASE_URL, force=True)     
