@@ -20,6 +20,8 @@ def _set_venue_globals():
     venue.token = 'Bearer test-tok'
     venue.ssl_verify = True
     yield
+    del venue.token
+    del venue.ssl_verify
 
 
 class TestCreateVenueGroup:
