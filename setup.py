@@ -14,7 +14,7 @@ setup(
     install_requires=get_dependencies(),
     description='Python libraries for JPL systems engineering',
     version='0.1.0',
-    python_requires='>=3.09',
+    python_requires='>=3.9',
     entry_points = {
     },
     author='Christopher Swan',

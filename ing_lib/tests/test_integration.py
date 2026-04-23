@@ -2,28 +2,46 @@
 Integration tests for ingenium-lib applications
 """
 
+import argparse
 import pytest
 import tempfile
 import json
 import os
 from unittest.mock import patch, MagicMock
 
-# Test constants
 MOCK_INGENIUM_SERVER = "https://mock-ingenium-server.example.com"
+
+
+def _make_inputs(**overrides):
+    """Build a minimal argparse Namespace that get_source_dictionaries expects."""
+    defaults = dict(
+        flight_sse=None, filter_retired=False,
+        specific_versions=None, include_vis=False, include_cs=False,
+    )
+    defaults.update(overrides)
+    return argparse.Namespace(**defaults)
 
 
 @pytest.mark.integration
 class TestIngLibIntegration:
     """Integration tests for the full backup/restore workflow."""
     
-    def test_backup_and_restore_workflow(self, comprehensive_server_mock):
+    @patch('common._stale_token', return_value=False)
+    @patch('apps.ProjConfigBackup.get_dictionary', return_value=[])
+    @patch('apps.ProjConfigBackup.get_dictionary_versions')
+    def test_backup_and_restore_workflow(self, mock_get_versions, mock_get_dict, _mock_stale, comprehensive_server_mock):
         """Test complete backup and restore workflow."""
         from apps.ProjConfigBackup import get_source_dictionaries
         from apps.ProjConfigRestore import restore_dictionaries
         
+        mock_get_versions.return_value = [
+            {'dictionary_version': 'v1.0', 'dictionary_description': 'Test Dict', 'state': 'PUBLISHED'}
+        ]
+        
         # Test backup
+        inputs = _make_inputs()
         backup_data = get_source_dictionaries(
-            MOCK_INGENIUM_SERVER, 'v4', True
+            MOCK_INGENIUM_SERVER, 'v4', inputs
         )
         
         # Verify backup structure
@@ -111,9 +129,8 @@ class TestIngLibIntegration:
             mock_delete_response   # Fourth delete succeeds
         ]
         
-        # Mock common.token to avoid authentication issues
-        with patch('common.token', 'Bearer mock_token'), \
-             patch('common.ssl_verify', True):
+        with patch.dict('common._store', {'token': 'Bearer mock_token', 'ssl_verify': True}), \
+             patch('common._stale_token', return_value=False):
             
             # Should not raise exception despite internal failures
             clear_project_configuration(MOCK_INGENIUM_SERVER, ['flight', 'sse'])
@@ -122,8 +139,8 @@ class TestIngLibIntegration:
     @patch('requests.get')
     @patch('os.path.exists')
     @patch('common.authenticate')
-    @patch('project_config.get_custom_scripts')
-    @patch('project_config.create_custom_script')
+    @patch('apps.ProjConfigCreateUpdateCS.get_custom_scripts')
+    @patch('apps.ProjConfigCreateUpdateCS.create_custom_script')
     def test_comprehensive_custom_script_workflow(self, mock_create, mock_get_scripts, 
                                                  mock_auth, mock_exists, mock_get, mock_post, 
                                                  temp_custom_script_xml):
@@ -159,7 +176,6 @@ class TestIngLibIntegration:
         assert 'output_array' in script_data  # Output array
         assert len(script_data['layout']) > 0  # Advanced layout
         
-        # Test validation
         assert validate_script_data(script_data) is True
         
         # Test end-to-end workflow with mocks
@@ -174,8 +190,8 @@ class TestIngLibIntegration:
             
             main(args)
             
-            # Verify HTTP requests were made (but mocked)
-            assert mock_get.called or mock_post.called
+            # Verify script creation was called
+            mock_create.assert_called_once()
 
     @pytest.mark.slow
     def test_multiple_dictionary_parsing_workflow(self, temp_xml_file, temp_channel_xml_file, 
@@ -212,4 +228,4 @@ class TestIngLibIntegration:
         assert any(ch.get('eu_present') == 'Yes' for ch in channels)   # Some channels have EU conversion
         # Fixed assertion - checking for format specifiers in EVR messages which indicates arguments
         assert any('%' in evr.get('evr_message', '') for evr in evrs)  # Some EVRs have arguments (format specifiers)
-        assert any(sig.get('enumerations') for sig in signals) # Some signals have enums 
+        assert any(sig.get('enumerations') for sig in signals) # Some signals have enums          

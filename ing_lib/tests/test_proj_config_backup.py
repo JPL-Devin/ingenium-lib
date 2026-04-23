@@ -2,15 +2,24 @@
 Tests for ProjConfigBackup.py
 """
 
+import argparse
 import pytest
 import os
 import json
 import tempfile
 from unittest.mock import patch, MagicMock, mock_open
-import sys
 
-# Import the module under test
 from apps.ProjConfigBackup import get_input, get_source_dictionaries, main
+
+
+def _make_inputs(**overrides):
+    """Build a minimal argparse Namespace that get_source_dictionaries expects."""
+    defaults = dict(
+        flight_sse=None, filter_retired=False,
+        specific_versions=None, include_vis=False, include_cs=False,
+    )
+    defaults.update(overrides)
+    return argparse.Namespace(**defaults)
 
 
 class TestProjConfigBackup:
@@ -29,7 +38,7 @@ class TestProjConfigBackup:
         assert inputs.api_version == 'v4'
         assert inputs.file_output == '/path/to/backup.json'
         assert inputs.debug is False
-        assert inputs.filter_retired is True
+        assert inputs.filter_retired is False
 
     def test_get_input_with_optional_args(self):
         """Test get_input with optional arguments."""
@@ -61,14 +70,20 @@ class TestProjConfigBackup:
         with pytest.raises(SystemExit):
             get_input(args)
 
-    def test_get_source_dictionaries_v4(self, comprehensive_server_mock):
+    @patch('common._stale_token', return_value=False)
+    @patch('apps.ProjConfigBackup.get_dictionary', return_value=[])
+    @patch('apps.ProjConfigBackup.get_dictionary_versions')
+    def test_get_source_dictionaries_v4(self, mock_get_versions, mock_get_dict, _mock_stale):
         """Test get_source_dictionaries with v4 API."""
-        result = get_source_dictionaries('https://test-server.example.com', 'v4', True)
+        mock_get_versions.return_value = [
+            {'dictionary_version': 'v1.0', 'dictionary_description': 'Test Dict', 'state': 'PUBLISHED'}
+        ]
+        inputs = _make_inputs()
+        result = get_source_dictionaries('https://test-server.example.com', 'v4', inputs)
         
         assert 'versions' in result
         assert 'flight' in result['versions']
         assert 'sse' in result['versions']
-        # The comprehensive_server_mock should return test data with published versions
         assert 'v1.0' in result['versions']['flight']
 
     def test_get_source_dictionaries_filter_retired(self):
@@ -94,10 +109,12 @@ class TestProjConfigBackup:
                     return mock_versions
             return []
         
-        with patch('common.ingenium_rest_get_paginated', side_effect=mock_paginated_side_effect), \
-             patch('common.ingenium_rest_get', return_value=[]):
+        with patch('project_config.ingenium_rest_get_paginated', side_effect=mock_paginated_side_effect), \
+             patch('project_config.ingenium_rest_get', return_value=[]), \
+             patch('common._stale_token', return_value=False):
             
-            result = get_source_dictionaries('https://test-server.example.com', 'v4', True)
+            inputs = _make_inputs(filter_retired=True)
+            result = get_source_dictionaries('https://test-server.example.com', 'v4', inputs)
             
             # Should only contain the published version
             assert 'v1.0' in result['versions']['flight']
@@ -126,10 +143,12 @@ class TestProjConfigBackup:
                     return mock_versions
             return []
         
-        with patch('common.ingenium_rest_get_paginated', side_effect=mock_paginated_side_effect), \
-             patch('common.ingenium_rest_get', return_value=[]):
+        with patch('project_config.ingenium_rest_get_paginated', side_effect=mock_paginated_side_effect), \
+             patch('project_config.ingenium_rest_get', return_value=[]), \
+             patch('common._stale_token', return_value=False):
             
-            result = get_source_dictionaries('https://test-server.example.com', 'v4', False)
+            inputs = _make_inputs(filter_retired=False)
+            result = get_source_dictionaries('https://test-server.example.com', 'v4', inputs)
             
             # Should contain both versions
             assert 'v1.0' in result['versions']['flight']
@@ -208,9 +227,18 @@ class TestProjConfigBackup:
             call_args = mock_auth.call_args
             assert call_args[1]['rsa'] is True
 
-    def test_get_source_dictionaries_v3(self, comprehensive_server_mock):
+    @patch('common._stale_token', return_value=False)
+    @patch('apps.ProjConfigBackup.common.refresh_auth', return_value=True)
+    @patch('apps.ProjConfigBackup.get_dictionary_element', return_value={'command_stem': 'CMD'})
+    @patch('apps.ProjConfigBackup.get_dictionary', return_value=[{'command_stem': 'CMD'}])
+    @patch('apps.ProjConfigBackup.get_dictionary_versions')
+    def test_get_source_dictionaries_v3(self, mock_get_versions, mock_get_dict, mock_get_elem, mock_refresh, _mock_stale):
         """Test get_source_dictionaries with v3 API."""
-        result = get_source_dictionaries('https://test-server.example.com', 'v3', True)
+        mock_get_versions.return_value = [
+            {'dictionary_version': 'v1.0', 'dictionary_description': 'Test Dict', 'state': 'PUBLISHED'}
+        ]
+        inputs = _make_inputs()
+        result = get_source_dictionaries('https://test-server.example.com', 'v3', inputs)
         
         assert 'versions' in result
         assert 'flight' in result['versions']
@@ -234,20 +262,21 @@ class TestProjConfigBackup:
                     return mock_versions
             return []
         
-        with patch('common.ingenium_rest_get_paginated', side_effect=mock_paginated_side_effect), \
-             patch('common.ingenium_rest_get', side_effect=Exception("Network error")):
+        with patch('project_config.ingenium_rest_get_paginated', side_effect=mock_paginated_side_effect), \
+             patch('project_config.ingenium_rest_get', side_effect=Exception("Network error")), \
+             patch('common._stale_token', return_value=False):
             
-            # Should not raise exception but log warning
-            result = get_source_dictionaries('https://test-server.example.com', 'v4', True)
+            inputs = _make_inputs()
+            result = get_source_dictionaries('https://test-server.example.com', 'v4', inputs)
             
             assert 'versions' in result
             assert 'v1.0' in result['versions']['flight']
 
     def test_main_with_ssl_ca_bundle(self, comprehensive_server_mock, mock_user_input):
         """Test main execution with SSL CA bundle."""
+        import common
         with patch('builtins.open', mock_open()), \
-             patch('json.dump'), \
-             patch('common.ssl_verify') as mock_ssl_verify:
+             patch('json.dump'):
             
             args = [
                 'https://test-server.example.com',
@@ -258,7 +287,8 @@ class TestProjConfigBackup:
             
             main(args)
             
-            # Test should complete without errors
+            # Source code sets common.ssl_verify (module attribute)
+            assert common.ssl_verify == '/path/to/ca-bundle.crt'
 
     def test_main_with_custom_username(self, comprehensive_server_mock):
         """Test main execution with custom username."""
@@ -279,4 +309,4 @@ class TestProjConfigBackup:
             # Verify authentication was called with custom username
             mock_auth.assert_called_once()
             call_args = mock_auth.call_args
-            assert call_args[1]['username'] == 'custom_user' 
+            assert call_args[1]['username'] == 'custom_user'        

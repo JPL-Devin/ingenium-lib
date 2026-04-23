@@ -470,7 +470,8 @@ class TestProjConfigCreateUpdateCS:
             'script_name': 'valid_script',
             'script_path': 'scripts/valid_script.sh',
             'description': 'Valid test script',
-            'script_id': generate_script_id('scripts/valid_script.sh')
+            'script_id': generate_script_id('scripts/valid_script.sh'),
+            'is_command': 'false'
         }
         
         assert validate_script_data(script_data) is True
@@ -547,6 +548,7 @@ class TestProjConfigCreateUpdateCS:
                 'script_path': 'test_script.sh',
                 'description': 'Test script',
                 'script_id': existing_script_id,
+                'is_command': 'false',
                 'hash': 'a'*64,  # Valid SHA256 hash format
                 'inputs': [],
                 'outputs': []
@@ -742,7 +744,7 @@ class TestProjConfigCreateUpdateCS:
         """Test validation of complex script data."""
         script_data = parse_custom_script_xml(temp_custom_script_xml, '/opt/scripts')
         
-        # Should pass validation
+        # Should pass validation (is_command comes from XML fixture)
         assert validate_script_data(script_data) is True
         
         # Test with missing field

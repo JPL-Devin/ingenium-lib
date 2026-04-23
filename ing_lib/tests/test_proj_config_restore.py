@@ -209,8 +209,7 @@ class TestProjConfigRestore:
         """Test SSL configuration in main."""
         with patch('builtins.open', mock_open()) as mock_file, \
              patch('json.load', return_value=sample_backup_data), \
-             patch('apps.ProjConfigRestore.restore_dictionaries'), \
-             patch('common.ssl_verify') as mock_ssl_verify:
+             patch('apps.ProjConfigRestore.restore_dictionaries'):
             
             # Test with ignore_ssl_error
             args = [
@@ -221,8 +220,8 @@ class TestProjConfigRestore:
             
             main(args)
             
-            # Verify SSL verification was configured
-            assert mock_ssl_verify is not None
+            # Source code sets common.ssl_verify (module attribute)
+            assert common.ssl_verify is False
 
     def test_restore_dictionaries_empty_data(self, comprehensive_server_mock):
         """Test restoration with empty backup data."""
@@ -248,4 +247,4 @@ class TestProjConfigRestore:
         }
         
         # Should handle missing keys gracefully
-        restore_dictionaries('https://test-server.example.com', incomplete_data) 
+        restore_dictionaries('https://test-server.example.com', incomplete_data)    

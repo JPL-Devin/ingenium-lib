@@ -1,5 +1,6 @@
 packaging==25.0
 pytest==8.4.1
-rich==14.0.0
-requests==2.32.4
-deepdiff==7.0.1
+PyJWT==2.10.1
+rich==15.0.0
+requests==2.33.1
+deepdiff==9.0.0
