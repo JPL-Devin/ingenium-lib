@@ -28,15 +28,17 @@ def mock_authentication():
 @pytest.fixture
 def mock_ssl_verify():
     """Mock SSL verification setting."""
-    with patch('common.ssl_verify', True):
+    with patch.dict('common._store', {'ssl_verify': True}):
         yield
 
 @pytest.fixture
 def mock_common_globals():
     """Mock common module global variables."""
-    with patch('common.ssl_verify', True), \
-         patch('common.token', 'mock_token_12345'), \
-         patch('common.refresh_time', datetime.datetime.utcnow()), \
+    with patch.dict('common._store', {
+             'ssl_verify': True,
+             'token': 'Bearer mock_token_12345',
+             'refresh_time': datetime.datetime.utcnow(),
+         }), \
          patch('common.refresh_auth', return_value=True):
         yield
 
@@ -187,8 +189,11 @@ def mock_empty_server():
     with contextlib.ExitStack() as stack:
         # Authentication and globals
         stack.enter_context(patch('common.authenticate', return_value=True))
-        stack.enter_context(patch('common.ssl_verify', True))
-        stack.enter_context(patch('common.token', 'mock_token_12345'))
+        stack.enter_context(patch.dict('common._store', {
+            'ssl_verify': True,
+            'token': 'Bearer mock_token_12345',
+            'refresh_time': datetime.datetime.utcnow(),
+        }))
         
         # GET functions - return empty data
         stack.enter_context(patch('project_config.get_dictionary_versions', return_value=[]))
@@ -374,7 +379,8 @@ echo "status=SUCCESS" >> output.txt
                    script_path="test_script.sh" 
                    description="Comprehensive test script with all field types"
                    hash="abc123def456"
-                   script_id="dGVzdF9zY3JpcHQuc2g=">
+                   script_id="dGVzdF9zY3JpcHQuc2g="
+                   is_command="false">
         
         <!-- Input fields covering all types -->
         <input_field name="integer_param" 
@@ -651,7 +657,8 @@ print(f"Hello from script with args: {sys.argv[1:] if len(sys.argv) > 1 else 'no
                    script_path="simple.py" 
                    description="Simple test script"
                    hash="simple123"
-                   script_id="c2ltcGxlLnB5">
+                   script_id="c2ltcGxlLnB5"
+                   is_command="false">
         
         <input_field name="message" 
                      description="Message to display" 
@@ -775,7 +782,8 @@ esac
                    script_path="multi_entry.sh" 
                    description="Script with multiple entry processing"
                    hash="entry789abc"
-                   script_id="bXVsdGlfZW50cnkuc2g=">
+                   script_id="bXVsdGlfZW50cnkuc2g="
+                   is_command="false">
         
         <!-- Global inputs -->
         <input_field name="global_config" 
@@ -1134,4 +1142,4 @@ def temp_mil1553_xml_file():
 def mock_urllib3_warnings():
     """Mock urllib3 warnings disable."""
     with patch('urllib3.disable_warnings'):
-        yield 
+        yield                

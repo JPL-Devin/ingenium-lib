@@ -35,8 +35,8 @@ def create_venue_group(server, content):
     endpoint = f"{server}{venue_group_endpoint}"
 
     try:
-        res = requests.post(endpoint, headers={'Authorization': token},
-                                      verify=ssl_verify,
+        res = requests.post(endpoint, headers={'Authorization': get_token()},
+                                      verify=get_ssl_verify(),
                                       json=content)
     except requests.ConnectionError:
         msg = f"Failed to communicate with: {server}"
@@ -125,8 +125,8 @@ def update_venue_group(server, venue_group_id, content):
     endpoint = f"{server}{venue_group_endpoint}/{venue_group_id}"
 
     try:
-        res = requests.patch(endpoint, headers={'Authorization': token},
-                             verify=ssl_verify,
+        res = requests.patch(endpoint, headers={'Authorization': get_token()},
+                             verify=get_ssl_verify(),
                              json=content)
     except requests.ConnectionError:
         msg = f"Failed to communicate with: {server}"
@@ -167,8 +167,8 @@ def update_ingenium_venue(server, venue_id, content):
     endpoint = f"{server}{venue_endpoint}/{venue_id}"
 
     try:
-        res = requests.patch(endpoint, headers={'Authorization': token},
-                             verify=ssl_verify,
+        res = requests.patch(endpoint, headers={'Authorization': get_token()},
+                             verify=get_ssl_verify(),
                              json=content)
     except requests.ConnectionError:
         msg = f"Failed to communicate with: {server}"
@@ -207,8 +207,8 @@ def create_ingenium_venue(server, content):
 
 
     try:
-        res = requests.post(endpoint, headers={'Authorization': token},
-                                      verify=ssl_verify,
+        res = requests.post(endpoint, headers={'Authorization': get_token()},
+                                      verify=get_ssl_verify(),
                                       json=content)
     except requests.ConnectionError:
         msg = f"Failed to communicate with: {server}"

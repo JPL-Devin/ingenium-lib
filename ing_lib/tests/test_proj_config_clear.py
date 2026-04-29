@@ -166,5 +166,5 @@ class TestProjConfigClear:
             args = ['https://test-server.example.com', '--ssl_ca_bundle', '/path/to/ca.pem']
             main(args)
 
-            # Verify SSL CA bundle setting was correctly set
-            assert common.ssl_verify == '/path/to/ca.pem' 
+            # Source code sets common.ssl_verify (module attribute)
+            assert common.ssl_verify == '/path/to/ca.pem'     

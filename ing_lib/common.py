@@ -372,7 +372,7 @@ def refresh_auth(server, force=False):
             
 
         if response_handler(refresh):
-            _store['token'] = f"Bearer {json.loads(logon.text)['access_token']}"
+            _store['token'] = f"Bearer {json.loads(refresh.text)['access_token']}"
             _store['refresh_time'] = datetime.datetime.utcnow()
             msg = f"Successfully refreshed token with: {server}"
             logger.debug(msg)
