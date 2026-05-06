@@ -6,6 +6,7 @@ import pytest
 import requests
 from unittest.mock import patch, MagicMock
 import sys
+import datetime
 
 # Import the module under test
 import common
@@ -84,6 +85,7 @@ class TestCommon:
         assert result is False
 
     @patch('requests.get')
+
     def test_ingenium_rest_get_success(self, mock_get):
         """Test successful ingenium_rest_get call."""
         # Mock successful response
@@ -93,7 +95,8 @@ class TestCommon:
         mock_get.return_value = mock_response
         
         # Set up token
-        common.token = "test_token"
+        common.set_token("test_token")
+        common.set_refresh_time(datetime.datetime.now(datetime.UTC))
         common.ssl_verify = True
         
         result = common.ingenium_rest_get(MOCK_API_ENDPOINT)
@@ -102,7 +105,8 @@ class TestCommon:
         mock_get.assert_called_once_with(
             MOCK_API_ENDPOINT,
             headers={'Authorization': 'test_token'},
-            verify=True
+            verify=True,
+            params={}
         )
 
     @patch('requests.get')
@@ -116,7 +120,7 @@ class TestCommon:
         mock_response.text = "Internal Server Error"
         mock_get.return_value = mock_response
         
-        common.token = "test_token"
+        common.set_token("test_token")
         
         # Should raise IngeniumLibError on failure
         with pytest.raises(common.IngeniumLibError) as exc_info:
@@ -153,8 +157,8 @@ class TestCommon:
         mock_response.json.return_value = {"data": "test_ssl_disabled"}
         mock_get.return_value = mock_response
         
-        common.token = "test_token"
-        common.ssl_verify = False
+        common.set_token("test_token")
+        common.set_ssl_verify(False)
         
         result = common.ingenium_rest_get(MOCK_API_ENDPOINT)
         
@@ -162,7 +166,8 @@ class TestCommon:
         mock_get.assert_called_once_with(
             MOCK_API_ENDPOINT,
             headers={'Authorization': 'test_token'},
-            verify=False
+            verify=False,
+            params={}
         )
 
     @patch('requests.get')
@@ -170,7 +175,7 @@ class TestCommon:
         """Test ingenium_rest_get with connection error."""
         mock_get.side_effect = requests.ConnectionError("Connection failed")
         
-        common.token = "test_token"
+        common.set_token("test_token")
         
         # Should raise the ConnectionError, not handle it gracefully
         with pytest.raises(requests.ConnectionError):
@@ -192,7 +197,7 @@ class TestCommon:
         mock_response.json.side_effect = ValueError("Invalid JSON")
         mock_get.return_value = mock_response
         
-        common.token = "test_token"
+        common.set_token("test_token")
         
         # Should raise the JSON decode error
         with pytest.raises(ValueError):
@@ -231,7 +236,7 @@ class TestCommon:
         mock_response.headers = {'x-total-count': '2'}
         mock_get.return_value = mock_response
         
-        common.token = "test_token"
+        common.set_token("test_token")
         common.ssl_verify = True
         
         result = common.ingenium_rest_get_paginated(MOCK_API_ENDPOINT)
@@ -255,12 +260,12 @@ class TestCommon:
         mock_get.return_value = mock_response
         
         # Clear existing token to test fresh authentication
-        common.token = None
+        common.set_token(None)
         
         result = common.authenticate(MOCK_BASE_URL, username="testuser", password="testpass")
         
         assert result is True
-        assert common.token == "Bearer mock_access_token"
+        assert common.get_token() == "Bearer mock_access_token"
         
         # Verify the authentication endpoint was called
         expected_url = f"{MOCK_BASE_URL}{common.auth_endpoint}"
@@ -277,12 +282,14 @@ class TestCommon:
         mock_post.return_value = mock_response
         
         # Set existing token
-        common.token = "Bearer old_token"
+        common.set_token("Bearer old_token")
+        common.set_ssl_verify(True)
+        common.set_refresh_time(datetime.datetime.now(datetime.UTC) - datetime.timedelta(seconds=3000))
         
         result = common.refresh_auth(MOCK_BASE_URL, force=True)
         
         assert result is True
-        assert common.token == "Bearer refreshed_access_token"
+        assert common.get_token() == "Bearer refreshed_access_token"
         
         # Verify the refresh endpoint was called
         expected_url = f"{MOCK_BASE_URL}{common.refresh_endpoint}"

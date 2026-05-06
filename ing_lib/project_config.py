@@ -648,3 +648,237 @@ def delete_vnv_vi(server, vi_id):
         msg = f"Response not completed successfully to {endpoint}"
         logger.error(msg)
         raise IngeniumLibError(msg)
+
+
+def get_built_in_palette(server, query={}):
+    """
+    Gets all built-in step palette settings
+
+    Parameters
+    ----------
+    server
+        Ingenium Server (e.g. https://ingenium.project_name.jpl.nasa.gov) without a trailing slash
+
+    query
+        Dictionary containing query parameters (step_type, display_name, enable_disable)
+
+    Returns
+    -------
+    steps
+        List of built-in step palette settings
+
+    """
+
+    endpoint = f"{server}{dictionary_endpoint}v4/step_palette/built_in"
+
+    msg = f"Querying Ingenium Built-in Step Palette from: {endpoint}"
+    logger.info(msg)
+
+    steps = ingenium_rest_get(endpoint, query_params = query)
+
+    return steps
+
+
+def update_built_in_palette(server, step_type, content):
+    """
+    Updates a specific built-in step_type palette settings.
+
+    Parameters
+    ----------
+    server
+        Ingenium Server (e.g. https://ingenium.project_name.jpl.nasa.gov) without a trailing slash
+
+    step_type
+        Built-in step to modify palette settings for. Includes:
+            - MANUAL_INPUT
+            - MANUAL_EIP
+            - VENUE_CONFIG_MANUAL
+            - ENVIRONMENT_MANUAL
+            - GDS_MANUAL
+            - QUERY_EVR
+            - VERIFY_EHA     
+            - WAIT_EHA
+            - BUS_1553
+            - WAIT_EVR
+            - LIST_DATA_PRODUCTS
+            - WAIT_DATA_PRODUCTS
+            - CMD
+            - CMD_FILE
+            - CMD_SCMF     
+            - CMD_SSE  
+            - MANUAL_VERIFICATION
+            - CUSTOM_SCRIPT
+            - WAIT  
+            - TIME_REFERENCE
+
+    content
+        Dictionary containing updates (step_display_name, palette_catagory, enable_disable)
+
+    Returns
+    -------
+    step
+        Built-in step palette setting
+    """
+
+    endpoint = f'{server}{dictionary_endpoint}v4/step_palette/built_in/{step_type}'
+
+    try:
+        res = requests.patch(endpoint, headers=_auth_header(),
+                                       verify=get_ssl_verify(),
+                                       json=content)
+    except requests.ConnectionError:
+        msg = f"Failed to communicate with: {server}"
+        logger.error(msg)
+        raise IngeniumLibError(msg)
+
+    if response_handler(res):
+        step = res.json()
+    else:
+        msg = f"Response not completed successfully to {endpoint}"
+        logger.error(msg)
+        raise IngeniumLibError(msg)
+
+    return step
+
+
+def get_custom_palette(server, query={}):
+    """
+    This function queries the dictionary service for custom step palettes
+
+    Parameters
+    ----------
+    server
+        Ingenium Server (e.g. https://ingenium.project_name.jpl.nasa.gov) without a trailing slash
+
+    query
+        Optional query parameter for searching palette content (display_name, sort, limit, offset, wild)
+
+    Returns
+    -------
+        JSON object containing custom palette data
+    """
+
+    endpoint = f"{server}{dictionary_endpoint}v4/step_palette/custom"
+
+    msg = f"Querying Ingenium Custom Step Palette from: {endpoint}"
+    logger.info(msg)
+
+    palette_data = ingenium_rest_get_paginated(endpoint, query_params = query)
+
+    return palette_data
+
+
+def create_custom_palette(server, content):
+    """
+    Creates custom step palette entries. Note only compatible with V4 of the API
+
+    Parameters
+    ----------
+    server
+        Ingenium Server (e.g. https://ingenium.project_name.jpl.nasa.gov) without a trailing slash
+
+    content
+        An array of custom step palette entries following PaletteCustomStep schema
+
+    Returns
+    -------
+    data
+        JSON object containing an array of created custom step palette entries
+    """
+
+    endpoint = f'{server}{dictionary_endpoint}v4/step_palette/custom'
+
+    try:
+        res = requests.post(endpoint, headers=_auth_header(),
+                                      verify=get_ssl_verify(),
+                                      json=content)
+    except requests.ConnectionError:
+        msg = f"Failed to communicate with: {server}"
+        logger.error(msg)
+        raise IngeniumLibError(msg)
+
+    if response_handler(res):
+        data = res.json()
+    else:
+        msg = f"Response not completed successfully to {endpoint}"
+        logger.error(msg)
+        raise IngeniumLibError(msg)
+
+    return data
+
+
+def update_custom_palette(server, step_id, content):
+    """
+    Updates a custom step palette entry. Note only compatible with V4 of the API
+
+    Parameters
+    ----------
+    server
+        Ingenium Server (e.g. https://ingenium.project_name.jpl.nasa.gov) without a trailing slash
+
+    step_id
+        Unique ID of the custom step palette entry
+
+    content
+        Dictionary containing updates following PaletteCustomStepPatch schema
+
+    Returns
+    -------
+    data
+        JSON object containing the updated custom step palette entry
+    """
+
+    endpoint = f'{server}{dictionary_endpoint}v4/step_palette/custom/{step_id}'
+
+    try:
+        res = requests.patch(endpoint, headers=_auth_header(),
+                                       verify=get_ssl_verify(),
+                                       json=content)
+    except requests.ConnectionError:
+        msg = f"Failed to communicate with: {server}"
+        logger.error(msg)
+        raise IngeniumLibError(msg)
+
+    if response_handler(res):
+        data = res.json()
+    else:
+        msg = f"Response not completed successfully to {endpoint}"
+        logger.error(msg)
+        raise IngeniumLibError(msg)
+
+    return data
+
+
+def delete_custom_palette(server, step_id):
+    """
+    Deletes a custom step palette entry. Note only compatible with V4 of the API
+
+    Parameters
+    ----------
+    server
+        Ingenium Server (e.g. https://ingenium.project_name.jpl.nasa.gov) without a trailing slash
+
+    step_id
+        Unique ID of the custom step palette entry
+
+    Returns
+    -------
+    """
+
+    endpoint = f'{server}{dictionary_endpoint}v4/step_palette/custom/{step_id}'
+
+    try:
+        res = requests.delete(endpoint, headers=_auth_header(),
+                                        verify=get_ssl_verify())
+    except requests.ConnectionError:
+        msg = f"Failed to communicate with: {server}"
+        logger.error(msg)
+        raise IngeniumLibError(msg)
+
+    if response_handler(res):
+        pass
+        # Note no action is required if 204 is received (empty JSON)
+    else:
+        msg = f"Response not completed successfully to {endpoint}"
+        logger.error(msg)
+        raise IngeniumLibError(msg)

@@ -374,7 +374,8 @@ echo "status=SUCCESS" >> output.txt
                    script_path="test_script.sh" 
                    description="Comprehensive test script with all field types"
                    hash="abc123def456"
-                   script_id="dGVzdF9zY3JpcHQuc2g=">
+                   script_id="dGVzdF9zY3JpcHQuc2g="
+                   is_command="false">
         
         <!-- Input fields covering all types -->
         <input_field name="integer_param" 

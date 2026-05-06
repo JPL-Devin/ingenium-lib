@@ -20,10 +20,21 @@ class TestIngLibIntegration:
         """Test complete backup and restore workflow."""
         from apps.ProjConfigBackup import get_source_dictionaries
         from apps.ProjConfigRestore import restore_dictionaries
+
+        # Create a mock inputs object
+        class MockInputs:
+            def __init__(self):
+                self.flight_sse = None
+                self.specific_versions = None
+                self.filter_retired = True
+                self.include_vis = True
+                self.include_cs = True
         
+        mock_inputs = MockInputs()
+
         # Test backup
         backup_data = get_source_dictionaries(
-            MOCK_INGENIUM_SERVER, 'v4', True
+            MOCK_INGENIUM_SERVER, 'v4', mock_inputs
         )
         
         # Verify backup structure
